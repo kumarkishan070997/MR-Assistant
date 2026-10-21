@@ -77,6 +77,13 @@ export class AnchorSymbolTrigger extends AnchorBaseElement {
       .toolbar-btn.find-btn:hover {
         background-color: #0369a1;
       }
+      .toolbar-btn.peek-btn {
+        background-color: #0284c7;
+        color: #ffffff;
+      }
+      .toolbar-btn.peek-btn:hover {
+        background-color: #0369a1;
+      }
       .toolbar-btn.ai-btn {
         background-color: #7c3aed;
         color: #ffffff;
@@ -165,6 +172,22 @@ export class AnchorSymbolTrigger extends AnchorBaseElement {
     );
   }
 
+  private handlePeekClick(e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    this.dispatchEvent(
+      new CustomEvent('anchor-symbol-peek', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          symbol: this.symbol,
+          x: this.x,
+          y: this.y + 36,
+        },
+      })
+    );
+  }
+
   private toggleAiMenu(e: MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
@@ -242,6 +265,15 @@ export class AnchorSymbolTrigger extends AnchorBaseElement {
                     <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path>
                   </svg>
                   <span>Find: <b>${this.symbol}</b></span>
+                </button>
+
+                <button
+                  type="button"
+                  class="toolbar-btn peek-btn"
+                  @click=${this.handlePeekClick}
+                  title="Quick inline peek callers & usages"
+                >
+                  <span>👁 Peek</span>
                 </button>
               `
             : html``}

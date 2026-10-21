@@ -8,6 +8,32 @@ export interface AISettings {
   customEndpoint?: string;
 }
 
+export interface ReviewProfileSettings {
+  strictness: 'critical' | 'high' | 'comprehensive';
+  ignoreFormatting: boolean;
+  focusAreas: {
+    security: boolean;
+    performance: boolean;
+    concurrency: boolean;
+    errorHandling: boolean;
+    architecture: boolean;
+  };
+  customInstructions: string;
+}
+
+export const defaultReviewProfile: ReviewProfileSettings = {
+  strictness: 'critical',
+  ignoreFormatting: true,
+  focusAreas: {
+    security: true,
+    performance: true,
+    concurrency: true,
+    errorHandling: true,
+    architecture: true,
+  },
+  customInstructions: '',
+};
+
 export interface ExtensionSettings {
   github: {
     pat: string;
@@ -19,6 +45,7 @@ export interface ExtensionSettings {
     custom_hosts: string[];
   };
   ai: AISettings;
+  review: ReviewProfileSettings;
   general: {
     auto_blast_radius: boolean;
     theme_mode: 'auto' | 'light' | 'dark';
@@ -42,6 +69,7 @@ export const defaultSettings: ExtensionSettings = {
     model: 'gemini-2.5-flash',
     customEndpoint: '',
   },
+  review: defaultReviewProfile,
   general: {
     auto_blast_radius: true,
     theme_mode: 'auto',
@@ -62,6 +90,14 @@ export async function loadSettings(): Promise<ExtensionSettings> {
           github: { ...defaultSettings.github, ...data.settings.github },
           gitlab: { ...defaultSettings.gitlab, ...data.settings.gitlab },
           ai: { ...defaultSettings.ai, ...data.settings.ai },
+          review: {
+            ...defaultReviewProfile,
+            ...data.settings.review,
+            focusAreas: {
+              ...defaultReviewProfile.focusAreas,
+              ...(data.settings.review?.focusAreas || {}),
+            },
+          },
           general: { ...defaultSettings.general, ...data.settings.general },
         };
         $settings.set(merged);
@@ -84,6 +120,14 @@ export async function saveSettings(updated: Partial<ExtensionSettings>): Promise
     gitlab: { ...current.gitlab, ...updated.gitlab },
     general: { ...current.general, ...updated.general },
     ai: { ...current.ai, ...updated.ai },
+    review: {
+      ...current.review,
+      ...updated.review,
+      focusAreas: {
+        ...current.review.focusAreas,
+        ...(updated.review?.focusAreas || {}),
+      },
+    },
   };
 
   $settings.set(next);

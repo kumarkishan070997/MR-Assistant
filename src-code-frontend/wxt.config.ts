@@ -9,9 +9,9 @@ export default defineConfig({
     plugins: [tailwindcss()],
   }),
   manifest: {
-    name: 'PR / MR Context Anchor',
-    description: 'In-diff cross-referencing, blast radius estimation, and private scratchpads for GitHub & GitLab.',
-    version: '0.1.0',
+    name: 'PeerPilot — AI Code Review Copilot',
+    description: 'In-diff blast radius analysis, anchored review notes, file check-off tracking, and AI code review for GitHub & GitLab.',
+    version: '0.2.0',
     permissions: ['storage'],
     host_permissions: [
       'https://github.com/*',
@@ -19,8 +19,19 @@ export default defineConfig({
       'https://api.github.com/*',
       '*://*/*',
     ],
+    icons: {
+      '16': 'icons/icon-16.png',
+      '32': 'icons/icon-32.png',
+      '48': 'icons/icon-48.png',
+      '128': 'icons/icon-128.png',
+    },
     action: {
-      default_title: 'PR / MR Context Anchor Settings',
+      default_title: 'PeerPilot Settings & AI Review Copilot',
+      default_icon: {
+        '16': 'icons/icon-16.png',
+        '32': 'icons/icon-32.png',
+        '48': 'icons/icon-48.png',
+      },
     },
   },
 });

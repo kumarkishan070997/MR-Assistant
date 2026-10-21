@@ -37,7 +37,13 @@ export class StorageService {
 
     const filtered: Record<string, LineNote> = {};
     for (const [key, note] of Object.entries(all)) {
-      if (key.startsWith(prefix) || (note.platform === platform && note.projectPath === projectPath && note.pullNumber === pullNumber)) {
+      if (
+        (key.startsWith(prefix) ||
+          (note.platform === platform && note.projectPath === projectPath && note.pullNumber === pullNumber)) &&
+        note &&
+        typeof note.content === 'string' &&
+        note.content.trim().length > 0
+      ) {
         filtered[key] = note;
       }
     }
@@ -47,6 +53,11 @@ export class StorageService {
   }
 
   public async saveNoteImmediate(note: LineNote): Promise<void> {
+    if (!note.content || !note.content.trim()) {
+      await this.deleteNote(note.id);
+      return;
+    }
+
     // Clear any pending debounce timer for this note
     if (this.debounceTimers.has(note.id)) {
       clearTimeout(this.debounceTimers.get(note.id));
@@ -75,6 +86,10 @@ export class StorageService {
     note: LineNote,
     debounceMs: number = this.defaultDebounceMs
   ): Promise<void> {
+    if (!note.content || !note.content.trim()) {
+      return this.deleteNote(note.id);
+    }
+
     // Update memory store immediately for snappy UI
     setNoteInStore(note);
 

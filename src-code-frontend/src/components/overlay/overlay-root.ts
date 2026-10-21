@@ -8,6 +8,8 @@ import { AnchorResultsDrawer } from '../drawers/results-drawer';
 import '../drawers/checklist-dock';
 import '../drawers/checklist-drawer';
 import { AnchorChecklistDrawer } from '../drawers/checklist-drawer';
+import '../diff/peek-card';
+import { AnchorPeekCard } from '../diff/peek-card';
 import { IPlatformAdapter, ReviewContext, DiffLineContext } from '../../adapters/base.adapter';
 import { globalSearchCache, SearchCacheService } from '../../services/search-cache.service';
 import { globalStorageService } from '../../services/storage.service';
@@ -23,6 +25,7 @@ export class AnchorOverlayRoot extends AnchorBaseElement {
   @query('anchor-symbol-trigger') triggerEl!: AnchorSymbolTrigger;
   @query('anchor-results-drawer') drawerEl!: AnchorResultsDrawer;
   @query('anchor-checklist-drawer') checklistDrawerEl!: AnchorChecklistDrawer;
+  @query('anchor-peek-card') peekCardEl!: AnchorPeekCard;
 
   private adapter: IPlatformAdapter | null = null;
   private context: ReviewContext | null = null;
@@ -139,12 +142,73 @@ export class AnchorOverlayRoot extends AnchorBaseElement {
     }
   }
 
+  public async performPeek(symbol: string, x: number, y: number, enclosingClass?: string) {
+    const peekCard = this.peekCardEl || (this.shadowRoot?.querySelector('anchor-peek-card') as AnchorPeekCard | null);
+    if (!peekCard || !this.adapter || !this.context) return;
+
+    this.hideTrigger();
+    peekCard.symbol = symbol;
+    peekCard.enclosingClass = enclosingClass || '';
+    peekCard.x = Math.max(12, Math.min(x, window.innerWidth - 500));
+    peekCard.y = Math.max(12, Math.min(y, window.innerHeight - 390));
+    peekCard.visible = true;
+    peekCard.loading = true;
+    peekCard.errorMessage = '';
+    peekCard.results = null;
+
+    const cacheKey = SearchCacheService.buildKey(
+      this.context.platform,
+      this.context.projectPath,
+      this.context.baseRef,
+      symbol,
+      enclosingClass
+    );
+
+    const cached = globalSearchCache.get(cacheKey);
+    if (cached) {
+      peekCard.results = cached;
+      peekCard.loading = false;
+      return;
+    }
+
+    await loadSettings();
+    const settings = $settings.get();
+    const token = this.context.platform === 'github' ? settings.github.pat : settings.gitlab.pat;
+
+    try {
+      const results = await this.adapter.searchSymbolReferences(this.context, symbol, token, enclosingClass);
+      if (!results.rateLimited) {
+        globalSearchCache.set(cacheKey, results);
+      }
+      peekCard.results = results;
+      if (results.errorMessage) {
+        peekCard.errorMessage = results.errorMessage;
+      }
+    } catch (err: unknown) {
+      peekCard.errorMessage = err instanceof Error ? err.message : 'Error peeking symbol references';
+    } finally {
+      peekCard.loading = false;
+    }
+  }
+
   override firstUpdated() {
     this.addEventListener('anchor-symbol-lookup', ((e: CustomEvent<{ symbol: string; enclosingClass?: string }>) => {
       this.performLookup(e.detail.symbol, e.detail.enclosingClass);
     }) as EventListener);
 
-    this.addEventListener('anchor-toggle-checklist', () => {
+    this.addEventListener('anchor-symbol-peek', ((e: CustomEvent<{ symbol: string; x: number; y: number; enclosingClass?: string }>) => {
+      this.performPeek(e.detail.symbol, e.detail.x, e.detail.y, e.detail.enclosingClass);
+    }) as unknown as EventListener);
+
+    this.addEventListener('anchor-toggle-checklist', (e: Event) => {
+      const custom = e as CustomEvent;
+      if (custom.detail?.initialTab && this.checklistDrawerEl) {
+        this.checklistDrawerEl.activeTab = custom.detail.initialTab;
+        if (!this.checklistDrawerEl.isOpen) {
+          this.checklistDrawerEl.open();
+          return;
+        }
+      }
       this.checklistDrawerEl?.toggle();
     });
 
@@ -322,6 +386,7 @@ export class AnchorOverlayRoot extends AnchorBaseElement {
   override render() {
     return html`
       <anchor-symbol-trigger></anchor-symbol-trigger>
+      <anchor-peek-card></anchor-peek-card>
       <anchor-results-drawer></anchor-results-drawer>
       <anchor-checklist-dock></anchor-checklist-dock>
       <anchor-checklist-drawer

@@ -16,6 +16,8 @@ export interface AIResponse {
   error?: string;
 }
 
+export type AIStreamCallback = (chunk: string, accumulated: string) => void;
+
 export class AIService {
   /**
    * Tests connection to the chosen AI provider with the provided API key.
@@ -42,14 +44,15 @@ export class AIService {
   }
 
   /**
-   * Generates AI assistance for a specific code review action.
+   * Generates AI assistance for a specific code review action with optional streaming support.
    */
   public static async executeAction(
     settings: AISettings,
     action: AIAction,
-    context: AICallContext
+    context: AICallContext,
+    onChunk?: AIStreamCallback
   ): Promise<AIResponse> {
-    if (!settings.enabled && !settings.apiKey) {
+    if (!settings.enabled && !settings.apiKey && settings.provider !== 'custom') {
       return {
         success: false,
         text: '',
@@ -58,7 +61,7 @@ export class AIService {
     }
 
     const { systemPrompt, userPrompt } = this.buildPrompt(action, context);
-    return this.generateResponse(settings, systemPrompt, userPrompt);
+    return this.generateResponse(settings, systemPrompt, userPrompt, onChunk);
   }
 
   /**
@@ -115,30 +118,90 @@ export class AIService {
   public static async generateResponse(
     settings: AISettings,
     systemPrompt: string,
-    userPrompt: string
+    userPrompt: string,
+    onChunk?: AIStreamCallback
   ): Promise<AIResponse> {
     switch (settings.provider) {
       case 'gemini':
-        return this.callGemini(settings, systemPrompt, userPrompt);
+        return this.callGemini(settings, systemPrompt, userPrompt, onChunk);
       case 'openai':
-        return this.callOpenAI(settings, systemPrompt, userPrompt);
+        return this.callOpenAI(settings, systemPrompt, userPrompt, onChunk);
       case 'anthropic':
-        return this.callAnthropic(settings, systemPrompt, userPrompt);
+        return this.callAnthropic(settings, systemPrompt, userPrompt, onChunk);
       case 'custom':
-        return this.callCustom(settings, systemPrompt, userPrompt);
+        return this.callCustom(settings, systemPrompt, userPrompt, onChunk);
       default:
         return { success: false, text: '', error: `Unsupported provider: ${settings.provider}` };
     }
   }
 
+  private static async readStream(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    provider: 'gemini' | 'openai' | 'anthropic' | 'custom',
+    onChunk: AIStreamCallback
+  ): Promise<string> {
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let accumulated = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+
+        let jsonStr = trimmed;
+        if (trimmed.startsWith('data: ')) {
+          jsonStr = trimmed.slice(6);
+        }
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          let token = '';
+
+          if (provider === 'gemini') {
+            token = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          } else if (provider === 'openai' || provider === 'custom') {
+            token =
+              parsed.choices?.[0]?.delta?.content ||
+              parsed.message?.content ||
+              parsed.response ||
+              '';
+          } else if (provider === 'anthropic') {
+            if (parsed.type === 'content_block_delta') {
+              token = parsed.delta?.text || '';
+            }
+          }
+
+          if (token) {
+            accumulated += token;
+            onChunk(token, accumulated);
+          }
+        } catch {
+          // Incomplete chunk line, ignore
+        }
+      }
+    }
+
+    return accumulated;
+  }
+
   private static async callGemini(
     settings: AISettings,
     systemPrompt: string,
-    userPrompt: string
+    userPrompt: string,
+    onChunk?: AIStreamCallback
   ): Promise<AIResponse> {
     try {
       const model = settings.model || 'gemini-2.5-flash';
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.apiKey}`;
+      const endpoint = onChunk ? 'streamGenerateContent?alt=sse&key=' : 'generateContent?key=';
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:${endpoint}${settings.apiKey}`;
 
       const res = await fetch(url, {
         method: 'POST',
@@ -168,6 +231,11 @@ export class AIService {
         };
       }
 
+      if (onChunk && res.body) {
+        const text = await this.readStream(res.body.getReader(), 'gemini', onChunk);
+        return { success: true, text: text.trim() };
+      }
+
       const data = await res.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
       return { success: true, text };
@@ -179,7 +247,8 @@ export class AIService {
   private static async callOpenAI(
     settings: AISettings,
     systemPrompt: string,
-    userPrompt: string
+    userPrompt: string,
+    onChunk?: AIStreamCallback
   ): Promise<AIResponse> {
     try {
       const model = settings.model || 'gpt-4o-mini';
@@ -192,6 +261,7 @@ export class AIService {
         body: JSON.stringify({
           model,
           temperature: 0.2,
+          stream: Boolean(onChunk),
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
@@ -208,6 +278,11 @@ export class AIService {
         };
       }
 
+      if (onChunk && res.body) {
+        const text = await this.readStream(res.body.getReader(), 'openai', onChunk);
+        return { success: true, text: text.trim() };
+      }
+
       const data = await res.json();
       const text = data.choices?.[0]?.message?.content?.trim() || '';
       return { success: true, text };
@@ -219,7 +294,8 @@ export class AIService {
   private static async callAnthropic(
     settings: AISettings,
     systemPrompt: string,
-    userPrompt: string
+    userPrompt: string,
+    onChunk?: AIStreamCallback
   ): Promise<AIResponse> {
     try {
       const model = settings.model || 'claude-3-5-sonnet-20241022';
@@ -234,6 +310,7 @@ export class AIService {
         body: JSON.stringify({
           model,
           max_tokens: 1024,
+          stream: Boolean(onChunk),
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
         }),
@@ -248,6 +325,11 @@ export class AIService {
         };
       }
 
+      if (onChunk && res.body) {
+        const text = await this.readStream(res.body.getReader(), 'anthropic', onChunk);
+        return { success: true, text: text.trim() };
+      }
+
       const data = await res.json();
       const text = data.content?.[0]?.text?.trim() || '';
       return { success: true, text };
@@ -259,7 +341,8 @@ export class AIService {
   private static async callCustom(
     settings: AISettings,
     systemPrompt: string,
-    userPrompt: string
+    userPrompt: string,
+    onChunk?: AIStreamCallback
   ): Promise<AIResponse> {
     try {
       const endpoint = (settings.customEndpoint || 'http://localhost:11434/v1').replace(/\/+$/, '');
@@ -275,6 +358,7 @@ export class AIService {
         body: JSON.stringify({
           model: settings.model || 'llama3',
           temperature: 0.2,
+          stream: Boolean(onChunk),
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
@@ -289,6 +373,11 @@ export class AIService {
           text: '',
           error: errJson.error?.message || `Custom API error (${res.status})`,
         };
+      }
+
+      if (onChunk && res.body) {
+        const text = await this.readStream(res.body.getReader(), 'custom', onChunk);
+        return { success: true, text: text.trim() };
       }
 
       const data = await res.json();
