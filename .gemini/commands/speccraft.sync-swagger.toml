@@ -1,0 +1,16 @@
+description = "Sync a module's API contract from its configured Swagger URL (human-triggered only)."
+prompt = """
+Read `spec/commands/speccraft.sync-swagger.md` and `spec/architecture/API-CONTRACT-SOURCE.md` in full, then sync the named module's contract from its configured Swagger URL.
+
+Input: {{args}}
+
+Rules before starting:
+- confirm `spec/architecture/API-CONTRACT-SOURCE.md` has a configured Swagger URL entry for the module before fetching — if missing, stop and report
+- fetch the live spec; convert JSON to YAML if needed (this repo's contract format is YAML-only)
+- merge into `contracts/<module>/<module>.yaml` — never blind-overwrite; add/update operations present in the fetch, leave existing entries not present in the fetch untouched
+- report a summary of operations added / updated / left untouched
+- STOP after reporting — no chaining into any other command
+- never treat this command's output as binding over an approved `LLD-BACKEND-<id>.md` touchpoint table — /speccraft.implement always reconciles against the LLD on conflict, not against whatever this command last wrote
+
+The canonical contract documents this as strictly advisory and never part of /speccraft.orchestrate's orchestration — the `/speccraft.sync-swagger <module>` signature is exact.
+"""

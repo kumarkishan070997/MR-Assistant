@@ -1,0 +1,25 @@
+description = "Run final read-only validation for a task."
+prompt = """
+Read `spec/commands/speccraft.validate.md` in full, then run final validation for the task provided.
+
+Input: {{args}} (optional leading `auto` token, then task id)
+
+Parse `{{args}}`: an optional leading `auto` token selects auto mode (see below); consume it first if present, then parse the rest exactly as before. `auto` present -> auto mode; absent -> interactive mode (default).
+
+Rules before starting (interactive mode):
+- confirm the task implementation is approved
+- confirm the task tests are approved
+- active phase must be execution
+- this command is read-only — no code changes allowed during validation
+- produce the Validation section (## Task: TASK-{id} → ### Validation) in spec/progress/<module>/progress-{STORY-ID}.md
+- check: implementation matches task scope, tests cover required behaviors, traceability chain is complete — 4-link (req → LLD → task → code → tests) for Layer: frontend tasks, 5-link (adds unit-test → integration-test) for Layer: backend tasks
+- after validation: output progress file path + pass/fail verdict + any gaps found, then STOP
+- mark task as done only if all checks pass and all gaps are recorded
+
+Rules before starting (auto mode — `auto` token present):
+- same confirmations and same read-only checks as interactive mode above — this command never writes code or tests, in either mode
+- there is no revise loop to self-review here (validation is read-only); apply `spec/commands/speccraft.validate.md` § Auto Mode instead: a `blocked` gap is logged to the traceability shard (`Approver: auto-mode-ai`, naming which earlier stage's own auto mode the gap routes back to) instead of pausing, and the run continues — the task's Final Task State still records `blocked` even though execution does not pause
+- report the same minimal handoff block with `Mode: auto`, then stop
+
+The canonical contract now documents the dual chain-length branch by task Layer, requires backend tasks to have an approved integration-tests stage before this command runs, and documents the full `/speccraft.validate auto <task-id>` signature and § Auto Mode mechanics.
+"""

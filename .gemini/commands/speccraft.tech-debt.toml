@@ -1,0 +1,19 @@
+description = "Produce a read-only technical-debt report for an existing frontend or backend codebase (human-triggered only)."
+prompt = """
+Read `spec/commands/speccraft.tech-debt.md` in full, then produce a read-only technical-debt report for the requested layer.
+
+Input: {{args}}
+
+Rules before starting:
+- confirm `spec/architecture/ARCH-DECISIONS.md` §Layer Scope includes the target layer — if it excludes this layer, stop and report the mismatch
+- confirm real code exists to audit (`src-code-frontend/`/`src-code-backend/`, or the path recorded from a prior `/speccraft.onboard` run) — if empty, stop and report there is nothing to audit yet
+- run Mode A (code-only: dependencies, deprecated/EOL patterns, code hygiene, test gaps, type-safety gaps, security-lite smells) always
+- run Mode B (architecture drift vs. locked `AD-FRONTEND-*`/`AD-BACKEND-*`/Tier-2 `rules/` content) only if a baseline is locked — leave the category empty otherwise, do not refuse the run
+- tag every finding with Severity (High/Med/Low), Category, Mode (A/B), file:line Evidence, and a Recommendation
+- never fix, refactor, or upgrade anything — report only
+- never perform live vulnerability-database/CVE lookups — flag dependency findings for human verification instead
+- write the report to `spec/progress/shared/TECH-DEBT-FRONTEND/REPORT.md` or `spec/progress/shared/TECH-DEBT-BACKEND/REPORT.md` (overwrite on re-run — point-in-time snapshot, not append-only)
+- report the minimal handoff block from `spec/commands/speccraft.tech-debt.md`, then STOP — this command has no approval gate and blocks nothing downstream
+
+The canonical contract documents the `/speccraft.tech-debt frontend|backend` signature — independent per layer, informational only, never part of `/speccraft.orchestrate`.
+"""

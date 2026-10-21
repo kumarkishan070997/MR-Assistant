@@ -1,0 +1,19 @@
+description = "Scaffold the requested layer's project per its locked stack."
+prompt = """
+Read `spec/commands/speccraft.scaffold.md` and `spec/init.md` in full, then scaffold the requested layer's project per its locked stack.
+
+Input: {{args}}
+
+Rules before starting:
+- confirm the target code root (src-code-frontend/ for frontend, src-code-backend/ for backend) does not already exist at repository root — if it exists, stop and report
+- confirm planning decomposition is approved (at least one approved task exists for that layer) or scaffold is explicitly requested ahead of tasks
+- confirm spec/architecture/ARCH-DECISIONS.md is populated for that layer before installing any dependencies — it is the locked stack authority; if it is still empty (boilerplate default), stop and report that stack decisions must be locked first
+- follow that layer's Required Stack section in spec/commands/speccraft.scaffold.md exactly, once populated for this project
+- create the folder structure as defined in that layer's section of spec/commands/speccraft.scaffold.md, once populated for this project
+- run build check and test runner check after scaffold
+- record completion in spec/progress/shared/scaffold-frontend/STATUS.md or spec/progress/shared/scaffold-backend/STATUS.md
+- after scaffold: output completion status + build/test check results, then STOP
+- do not write any feature code, business logic, or components/route handlers beyond the stubs listed in speccraft.scaffold.md
+
+The canonical contract now documents the `/speccraft.scaffold frontend|backend` signature — the two code roots are scaffolded independently.
+"""

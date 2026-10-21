@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SDD Insights</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#16213a; --border:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444; --blue:#3b82f6; --gray:#64748b;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+  header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--border);}
+  header h1{font-size:16px;margin:0;font-weight:600;}
+  header .spacer{flex:1;}
+  button{background:var(--accent);color:#0f172a;border:none;padding:8px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px;}
+  button.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--border);}
+  #status-line{color:var(--muted);font-size:12px;}
+  #layout{display:flex;height:calc(100vh - 53px);}
+  #sidebar{width:260px;border-right:1px solid var(--border);overflow-y:auto;padding:12px;background:var(--panel2);flex-shrink:0;}
+  #sidebar h3{font-size:12px;text-transform:uppercase;color:var(--muted);margin:4px 0 8px;}
+  #storyDropdown{position:relative;margin-bottom:16px;}
+  #storyDropdownBtn{width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;}
+  #storyDropdownPanel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px;z-index:10;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
+  #storyDropdownPanel input[type=text]{width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;}
+  #storyList label{display:flex;align-items:center;gap:6px;padding:4px 4px;border-radius:4px;cursor:pointer;font-size:12px;}
+  #storyList label:hover{background:var(--panel2);}
+  #storyList .story-name{flex:1;}
+  #storyList .story-mod{color:var(--muted);font-size:10px;}
+  #tree-actions{display:flex;gap:6px;margin:2px 0 6px;}
+  #tree-actions button{flex:1;padding:4px;font-size:11px;}
+  #main{flex:1;overflow-y:auto;padding:16px 20px;}
+  .empty-state{color:var(--muted);text-align:center;padding:60px 20px;}
+  #tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap;}
+  .tab-btn{background:none;border:none;color:var(--muted);padding:8px 14px;cursor:pointer;font-size:13px;border-bottom:2px solid transparent;}
+  .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+  .cards{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 16px;min-width:110px;}
+  .card .num{font-size:22px;font-weight:700;}
+  .card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;}
+  .panel h4{margin:0 0 12px;font-size:13px;color:var(--muted);text-transform:uppercase;}
+  .charts-row{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;}
+  .donut-block{display:flex;align-items:center;gap:14px;}
+  .donut{width:100px;height:100px;border-radius:50%;position:relative;flex-shrink:0;}
+  .donut::after{content:'';position:absolute;inset:16px;background:var(--panel);border-radius:50%;}
+  .donut-total{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;z-index:2;}
+  .legend{font-size:12px;}
+  .legend div{display:flex;align-items:center;gap:6px;margin:3px 0;}
+  .dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+  .barchart{flex:1;min-width:280px;}
+  .barchart .row{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px;}
+  .barchart .label{width:110px;flex-shrink:0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);}
+  .barchart .track{flex:1;background:var(--panel2);border-radius:4px;overflow:hidden;height:16px;display:flex;}
+  .barchart .seg{height:100%;}
+  .barchart .value{width:90px;font-size:11px;color:var(--muted);}
+  .controls{display:flex;gap:10px;margin-bottom:12px;}
+  .controls input, .controls select{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;}
+  .controls input{flex:1;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+  th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;position:sticky;top:0;background:var(--panel);}
+  tr:hover td{background:rgba(255,255,255,0.03);}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:#0f172a;}
+  .seg-bar{display:flex;height:14px;border-radius:3px;overflow:hidden;width:160px;}
+  .seg-bar div{flex:1;}
+  .expand-row{cursor:pointer;}
+  .expand-row:hover{background:rgba(255,255,255,0.03);}
+  .history{background:var(--panel2);padding:8px;}
+  .muted{color:var(--muted);}
+</style>
+</head>
+<body>
+<header>
+  <h1>SDD Insights</h1>
+  <input type="file" id="folderInput" webkitdirectory multiple style="display:none;">
+  <button id="pickBtn">Select traceability folder</button>
+  <span id="status-line">No data loaded</span>
+  <input type="file" id="progressFolderInput" webkitdirectory multiple style="display:none;">
+  <button class="secondary" id="pickProgressBtn">Select progress folder</button>
+  <span id="progress-status-line" class="muted" style="font-size:12px;">No CR data loaded</span>
+  <div class="spacer"></div>
+  <button class="secondary" id="refreshBtn" style="display:none;">Refresh view</button>
+</header>
+<div id="layout">
+  <div id="sidebar">
+    <h3>Stories</h3>
+    <div id="storyDropdown">
+      <button class="secondary" id="storyDropdownBtn" type="button">Stories (0/0) &#9662;</button>
+      <div id="storyDropdownPanel" style="display:none;">
+        <input type="text" id="storySearch" placeholder="Search stories...">
+        <div id="tree-actions">
+          <button class="secondary" id="selAll">All</button>
+          <button class="secondary" id="selNone">None</button>
+        </div>
+        <div id="storyList"><span class="muted">No stories loaded.</span></div>
+      </div>
+    </div>
+  </div>
+  <div id="main">
+    <div class="empty-state" id="emptyState">
+      Select <code>spec/traceability</code> to load traceability shards.<br>
+      Nothing is uploaded or stored — parsed in-browser only.
+    </div>
+    <div id="content" style="display:none;">
+      <div class="cards" id="summaryCards"></div>
+      <div id="tabs"></div>
+      <div id="tabContent"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Story shards don't all spell section headings the same way in practice — some use a single
+// 'Code to Tests' heading, some merge both test-chain links under one heading, some use the
+// canonical two-heading form. Resolve by normalized alias (each value is the list of data keys
+// that heading can supply) instead of one exact string per key.
+const SECTION_ALIASES = {
+  'business spec to lld': ['reqToLld'],
+  'lld to tasks': ['lldToTask'],
+  'tasks to code': ['taskToCode'],
+  'code to tests': ['codeToTest'],
+  'code to unit tests': ['codeToTest'],
+  'unit tests to integration tests': ['unitToIntegration'],
+  // merged heading: first table block under it is unit tests, any further block is integration tests
+  'code to tests / unit tests to integration tests': ['codeToTest', 'unitToIntegration'],
+  'coverage matrix': ['coverage'],
+  'workflow metrics': ['metrics'],
+  'conflict decisions': ['conflicts']
+};
+const SECTION_KEYS = ['reqToLld','lldToTask','taskToCode','codeToTest','unitToIntegration','coverage','metrics','conflicts'];
+// Coverage Matrix column names drift across shards (e.g. 'Task'/'Overall' vs the canonical
+// 'Task Mapped'/'Overall Status') — canonicalize at ingestion so every downstream lookup
+// (segment bar, donut, summary % card) can rely on one fixed set of keys.
+const COVERAGE_HEADER_ALIASES = {
+  'task': 'Task Mapped',
+  'code': 'Code Mapped',
+  'unit test': 'Unit Test Mapped',
+  'integration test': 'Integration Test Mapped',
+  'overall': 'Overall Status'
+};
+function normalizeHeading(t){
+  return (t||'').trim().toLowerCase().replace(/\s+/g,' ');
+}
+function resolveSectionKeys(title){
+  return SECTION_ALIASES[normalizeHeading(title)] || [];
+}
+function canonicalHeader(key, h){
+  if(key !== 'coverage') return h;
+  return COVERAGE_HEADER_ALIASES[h.trim().toLowerCase()] || h;
+}
+const TAB_TITLES = {
+  reqToLld: 'Business → LLD',
+  lldToTask: 'LLD → Task',
+  taskToCode: 'Task → Code',
+  codeToTest: 'Code → Unit Test',
+  unitToIntegration: 'Unit Test → Integration Test',
+  coverage: 'Coverage Matrix',
+  metrics: 'Workflow Metrics',
+  conflicts: 'Conflict Decisions',
+  changeRequests: 'Change Requests'
+};
+// 'Layer' is the first data column throughout — one traceability shard per story now carries both
+// the frontend and backend chains, distinguished per-row by Layer (frontend/backend). The
+// Unit Test -> Integration Test chain only ever has rows for Layer=backend (integration testing
+// is a backend-only stage; frontend tasks skip straight from Testing to Validation).
+const DEFAULT_COLS = {
+  reqToLld: ['Layer','Req ID','Req Description','LLD File','LLD Section','Source','Status'],
+  lldToTask: ['Layer','LLD File','LLD Section','Task ID','Source','Status'],
+  taskToCode: ['Layer','Task ID','Code Files / Units Changed','Status'],
+  codeToTest: ['Layer','Task ID','Code Unit','Test File','Test Cases','Status'],
+  unitToIntegration: ['Layer','Task ID','Boundaries Covered','Integration Test File','Test Cases','Status'],
+  coverage: ['Layer','Req ID','LLD Mapped','Task Mapped','Code Mapped','Unit Test Mapped','Integration Test Mapped','Overall Status'],
+  metrics: ['Layer','Story ID','Command','Stage','Date','Model','Start','End','Duration (min)','Input Tok','Output Tok','Tok Source','Artifacts','Status','Notes'],
+  conflicts: ['Decision ID','Story ID','Layer','Date','Stage','Conflict Type','Source A','Source B','Conflicting Element','Status','Resolution','Decided By','Recorded By','Unblocks'],
+  changeRequests: ['CR ID','Role','Originating Story','Source CR File','Date','Trigger Reason','Requirement IDs Added','Requirement IDs Superseded','Spawned Task IDs','Bundle Status']
+};
+const STAGE_LIST = ['Intake','LLD','Decomposition','Implementation','Testing','Integration Testing','Validation'];
+const TAB_STAGE = {
+  reqToLld: 'LLD',
+  lldToTask: 'Decomposition',
+  taskToCode: 'Implementation',
+  codeToTest: 'Testing',
+  unitToIntegration: 'Integration Testing'
+};
+
+let allData = {};
+let checkedLeaves = new Set();
+let allLeaves = [];
+let activeTab = 'metrics';
+const tabState = {}; // {key: {search:'', status:'', layer:'', source:''}}
+// Change Request progress entries live in a separate tree (spec/progress/...) picked via its own
+// folder input, independent of the traceability sidebar/checkedLeaves scope — this tab is not
+// gated by the Stories sidebar, only by its own search/status filter.
+let crEntries = [];
+
+function emptyData(){
+  const d = {};
+  SECTION_KEYS.forEach(k => d[k] = []);
+  return d;
+}
+
+function splitSections(md){
+  const lines = md.split(/\r?\n/);
+  const sections = [];
+  let current = null;
+  for(const line of lines){
+    const m = line.match(/^##\s+(.+?)\s*$/);
+    if(m){
+      current = {title: m[1].trim(), lines: []};
+      sections.push(current);
+    } else if(current){
+      current.lines.push(line);
+    }
+  }
+  return sections;
+}
+
+function isSeparatorRow(line){
+  return /^\|?[\s:-]+\|[\s:|-]*$/.test(line.trim()) && line.includes('-');
+}
+
+function splitRow(line){
+  let l = line.trim();
+  if(l.startsWith('|')) l = l.slice(1);
+  if(l.endsWith('|')) l = l.slice(0, -1);
+  return l.split('|').map(c => c.trim());
+}
+
+function numFrom(v){
+  if(v == null) return 0;
+  const m = String(v).match(/-?\d+(?:,\d{3})*(?:\.\d+)?/);
+  if(!m) return 0;
+  return parseFloat(m[0].replace(/,/g, '')) || 0;
+}
+
+// A section's markdown body can hold more than one table block (a merged 'unit tests /
+// integration tests' heading, or prose separating two tables) — collect every contiguous
+// '|'-line block instead of just the first. A block that isn't followed by its own separator
+// row is treated as a continuation of the previous table (reuses its header) rather than a
+// malformed table of its own — this is what happens when a stray blank line splits one logical
+// table into two '|'-blocks.
+function findTables(lines){
+  const tables = [];
+  let lastHeaders = null;
+  let i = 0;
+  while(i < lines.length){
+    if(lines[i].trim().startsWith('|')){
+      const start = i;
+      let end = i;
+      while(end < lines.length && lines[end].trim().startsWith('|')) end++;
+      const raw = lines.slice(start, end);
+      const hasOwnHeader = raw.length > 1 && isSeparatorRow(raw[1]);
+      let headers, dataRaw;
+      if(hasOwnHeader){
+        headers = splitRow(raw[0]);
+        dataRaw = raw.slice(1);
+      } else if(lastHeaders){
+        headers = lastHeaders;
+        dataRaw = raw;
+      } else {
+        headers = splitRow(raw[0]);
+        dataRaw = raw.slice(1);
+      }
+      const dataLines = dataRaw.filter(l => !isSeparatorRow(l));
+      const rows = dataLines
+        .map(splitRow)
+        .filter(r => r.some(c => c !== '' && c !== '—'));
+      if(rows.length){
+        tables.push({headers, rows});
+        lastHeaders = headers;
+      }
+      i = end;
+    } else {
+      i++;
+    }
+  }
+  return tables;
+}
+
+function statusColor(s){
+  s = (s||'').toLowerCase().trim();
+  // Statuses are sometimes qualified with a footnote marker or parenthetical note
+  // (e.g. "mapped (axe-core)", "deferred²") — match by prefix, not exact equality,
+  // so the qualifier doesn't fall through to the gray/unset bucket.
+  const startsWithAny = arr => arr.some(k => s.startsWith(k));
+  if(startsWithAny(['mapped','approved','done','complete'])) return getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
+  if(startsWithAny(['partial','in-review','revised','revise','draft'])) return getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim();
+  if(startsWithAny(['missing','blocked'])) return getComputedStyle(document.documentElement).getPropertyValue('--red').trim();
+  return getComputedStyle(document.documentElement).getPropertyValue('--gray').trim();
+}
+
+function layerColor(l){
+  l = (l||'').toLowerCase();
+  if(l === 'frontend') return getComputedStyle(document.documentElement).getPropertyValue('--blue').trim();
+  if(l === 'backend') return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  return getComputedStyle(document.documentElement).getPropertyValue('--gray').trim();
+}
+
+function tokSourceColor(v){
+  v = (v||'').toLowerCase();
+  if(v === 'actual') return getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
+  if(v === 'estimated') return getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim();
+  return getComputedStyle(document.documentElement).getPropertyValue('--gray').trim();
+}
+
+function crSourceColor(v){
+  v = (v||'').trim().toLowerCase();
+  if(v === 'original' || v === '') return getComputedStyle(document.documentElement).getPropertyValue('--gray').trim();
+  return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+}
+
+function buildTree(dirs){
+  const root = {name:'', children:{}, full:''};
+  for(const d of dirs){
+    const parts = d.split('/').filter(Boolean);
+    let node = root;
+    let acc = [];
+    for(const p of parts){
+      acc.push(p);
+      const full = acc.join('/');
+      if(!node.children[p]) node.children[p] = {name:p, children:{}, full, isLeaf:false};
+      node = node.children[p];
+    }
+    node.isLeaf = true;
+  }
+  return root;
+}
+
+function collectLeaves(node, out){
+  if(node.isLeaf) out.push(node.full);
+  Object.values(node.children).forEach(c => collectLeaves(c, out));
+  return out;
+}
+
+function renderStoryDropdown(){
+  const list = document.getElementById('storyList');
+  const search = (document.getElementById('storySearch').value || '').toLowerCase();
+  const items = allLeaves.filter(l => l.toLowerCase().includes(search));
+  const checkedCount = items.filter(l => checkedLeaves.has(l)).length;
+  const allChecked = items.length > 0 && checkedCount === items.length;
+  const allIndeterminate = checkedCount > 0 && checkedCount < items.length;
+  const allRow = `<label style="border-bottom:1px solid var(--border);margin-bottom:4px;padding-bottom:6px;">
+      <input type="checkbox" id="allStoriesCb" ${allChecked ? 'checked' : ''}>
+      <span class="story-name"><strong>All</strong></span>
+      <span class="story-mod">${checkedCount}/${items.length}</span>
+    </label>`;
+  const rows = items.map(l => {
+    const parts = l.split('/');
+    const storyName = parts[parts.length - 1] || l;
+    const modPath = parts.slice(0, -1).join(' / ');
+    const checked = checkedLeaves.has(l);
+    return `<label>
+      <input type="checkbox" data-leaf="${l}" ${checked ? 'checked' : ''}>
+      <span class="story-name">${storyName}</span>
+      <span class="story-mod">${modPath}</span>
+    </label>`;
+  }).join('') || '<span class="muted">No stories match.</span>';
+  list.innerHTML = items.length ? (allRow + rows) : rows;
+  const allCb = document.getElementById('allStoriesCb');
+  if(allCb){
+    allCb.indeterminate = allIndeterminate;
+    allCb.addEventListener('change', () => {
+      if(allCb.checked) items.forEach(l => checkedLeaves.add(l));
+      else items.forEach(l => checkedLeaves.delete(l));
+      renderStoryDropdown();
+      renderAll();
+    });
+  }
+  list.querySelectorAll('input[data-leaf]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const leaf = cb.dataset.leaf;
+      if(cb.checked) checkedLeaves.add(leaf); else checkedLeaves.delete(leaf);
+      updateStoryDropdownLabel();
+      renderStoryDropdown();
+      renderAll();
+    });
+  });
+  updateStoryDropdownLabel();
+}
+
+function updateStoryDropdownLabel(){
+  document.getElementById('storyDropdownBtn').innerHTML =
+    `Stories (${checkedLeaves.size}/${allLeaves.length}) &#9662;`;
+}
+
+// Matches '## Change Request: CR-3' style headings in a progress-<STORY-ID>.md file.
+// Per spec/workflows/shared/SHARED-POLICIES.md §Change Request Log Rules, the section body
+// holds one entry table (CR ID/Role/.../Bundle Status, one row) and, on the originating
+// story's entry only, a second '### Cascade Impact' table (Story ID/Relationship/Decision/Reason).
+const CR_HEADING_RE = /^change request:\s*(cr-\d+)\s*$/i;
+
+function parseProgressFile(text, relDir, storyId, relPath){
+  const sections = splitSections(text);
+  const entries = [];
+  for(const sec of sections){
+    const m = normalizeHeading(sec.title).match(CR_HEADING_RE);
+    if(!m) continue;
+    const tables = findTables(sec.lines);
+    if(tables.length === 0) continue;
+    const entryTable = tables[0];
+    const entry = {};
+    entryTable.headers.forEach((h, i) => { entry[h] = entryTable.rows[0] ? (entryTable.rows[0][i] ?? '') : ''; });
+    if(!entry['CR ID']) entry['CR ID'] = m[1].toUpperCase();
+    entry.__source = relDir + '/' + storyId;
+    entry.__file = relPath;
+    entry.__storyId = storyId;
+    entry.__cascade = tables.length > 1 ? tables[1] : null;
+    entries.push(entry);
+  }
+  return entries;
+}
+
+function pushTableRows(key, table, relDir, relPath){
+  for(const r of table.rows){
+    const obj = {};
+    table.headers.forEach((h, i) => { obj[canonicalHeader(key, h)] = r[i] ?? ''; });
+    obj.__source = relDir;
+    obj.__file = relPath;
+    allData[key].push(obj);
+  }
+}
+
+document.getElementById('pickBtn').addEventListener('click', () => document.getElementById('folderInput').click());
+
+document.getElementById('folderInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files).filter(f => {
+    const rel = f.webkitRelativePath || f.name;
+    if(!/(^|[\\/])traceability\.md$/i.test(rel)) return false;
+    if(/(^|[\\/])traceability[\\/]traceability\.md$/i.test(rel)) return false; // root deprecated template — not a story shard
+    if(/(^|[\\/])shared[\\/]scaffold[\\/]traceability\.md$/i.test(rel)) return false; // repo-wide scaffold history — not a story shard
+    return true;
+  });
+  if(files.length === 0){
+    document.getElementById('status-line').textContent = 'No TRACEABILITY.md files found in selection.';
+    return;
+  }
+  allData = emptyData();
+  const dirs = [];
+  for(const f of files){
+    const text = await f.text();
+    const relPath = f.webkitRelativePath;
+    const relDir = relPath.split('/').slice(0, -1).join('/');
+    dirs.push(relDir);
+    const sections = splitSections(text);
+    for(const sec of sections){
+      const keys = resolveSectionKeys(sec.title);
+      if(!keys.length) continue;
+      const tables = findTables(sec.lines);
+      tables.forEach((table, i) => {
+        // Single-key headings use their one resolved key for every table block found under them.
+        // The merged 'Code to Tests / Unit Tests to Integration Tests' heading resolves two keys:
+        // its first table block is unit tests, any further block is integration tests.
+        const key = keys.length > 1 ? (i === 0 ? keys[0] : keys[1]) : keys[0];
+        pushTableRows(key, table, relDir, relPath);
+        // Some single-table 'Code to Tests' sections embed integration-test coverage as a column
+        // (e.g. an 'Integration tests' column) instead of a separate table — mirror those rows
+        // into Unit Test -> Integration Test too, so that tab isn't left empty for those stories.
+        if(key === 'codeToTest' && table.headers.some(h => /integration/i.test(h))){
+          pushTableRows('unitToIntegration', table, relDir, relPath);
+        }
+      });
+    }
+  }
+  const treeRoot = buildTree(dirs);
+  allLeaves = collectLeaves(treeRoot, []);
+  checkedLeaves = new Set(allLeaves);
+  renderStoryDropdown();
+  document.getElementById('status-line').textContent = `${files.length} shard file(s) loaded`;
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+  document.getElementById('refreshBtn').style.display = 'inline-block';
+  buildTabs();
+  renderAll();
+});
+
+document.getElementById('pickProgressBtn').addEventListener('click', () => document.getElementById('progressFolderInput').click());
+
+document.getElementById('progressFolderInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files).filter(f => /(^|[\\/])progress-[^\\/]+\.md$/i.test(f.webkitRelativePath || f.name));
+  const statusEl = document.getElementById('progress-status-line');
+  if(files.length === 0){
+    statusEl.textContent = 'No progress-<STORY-ID>.md files found in selection.';
+    return;
+  }
+  crEntries = [];
+  for(const f of files){
+    const text = await f.text();
+    const relPath = f.webkitRelativePath;
+    const relDir = relPath.split('/').slice(0, -1).join('/');
+    const fname = relPath.split('/').pop();
+    const storyMatch = fname.match(/^progress-(.+)\.md$/i);
+    const storyId = storyMatch ? storyMatch[1] : fname;
+    parseProgressFile(text, relDir, storyId, relPath).forEach(entry => crEntries.push(entry));
+  }
+  statusEl.textContent = `${files.length} progress file(s), ${crEntries.length} CR entr${crEntries.length === 1 ? 'y' : 'ies'} loaded`;
+  if(document.getElementById('content').style.display === 'none'){
+    // Traceability folder was never picked — reveal the UI from this picker alone so
+    // Change Requests can be inspected without also loading traceability data.
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+    activeTab = 'changeRequests';
+    buildTabs();
+  }
+  renderAll();
+});
+
+document.getElementById('selAll').addEventListener('click', () => {
+  checkedLeaves = new Set(allLeaves);
+  renderStoryDropdown(); renderAll();
+});
+document.getElementById('selNone').addEventListener('click', () => {
+  checkedLeaves = new Set();
+  renderStoryDropdown(); renderAll();
+});
+document.getElementById('refreshBtn').addEventListener('click', renderAll);
+
+document.getElementById('storyDropdownBtn').addEventListener('click', () => {
+  const panel = document.getElementById('storyDropdownPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('storySearch').addEventListener('input', renderStoryDropdown);
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('storyDropdown');
+  if(!wrap.contains(e.target)) document.getElementById('storyDropdownPanel').style.display = 'none';
+});
+
+function buildTabs(){
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = Object.keys(TAB_TITLES).map(k =>
+    `<button class="tab-btn ${k===activeTab?'active':''}" data-tab="${k}">${TAB_TITLES[k]}</button>`
+  ).join('');
+  tabs.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTab = btn.dataset.tab;
+      tabs.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b===btn));
+      renderAll();
+    });
+  });
+}
+
+function visibleRows(key){
+  return (allData[key]||[]).filter(r => checkedLeaves.has(r.__source));
+}
+
+function applyFilters(key, rows){
+  const st = tabState[key] || {search:'', status:'', layer:'', source:''};
+  const cols = rows.length ? Object.keys(rows[0]).filter(c => !c.startsWith('__')) : DEFAULT_COLS[key];
+  const statusCol = cols.find(c => /status/i.test(c));
+  const layerCol = cols.find(c => /^layer$/i.test(c));
+  // 'Source' distinguishes original decomposition rows from rows a /speccraft.change added
+  // (value 'original' vs 'CR-<n>') — only present on reqToLld/lldToTask tables today.
+  const sourceCol = cols.find(c => /^source$/i.test(c));
+  return rows.filter(r => {
+    if(st.status && statusCol && (r[statusCol]||'').toLowerCase() !== st.status.toLowerCase()) return false;
+    if(st.layer && layerCol && (r[layerCol]||'').toLowerCase() !== st.layer.toLowerCase()) return false;
+    if(st.source && sourceCol && (r[sourceCol]||'').toLowerCase() !== st.source.toLowerCase()) return false;
+    if(st.search){
+      const hay = Object.values(r).join(' ').toLowerCase();
+      if(!hay.includes(st.search.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+
+function buildConic(counts){
+  const total = counts.reduce((a,c) => a + c.value, 0);
+  if(total <= 0) return '#334155';
+  let acc = 0; const stops = [];
+  for(const c of counts){
+    if(c.value <= 0) continue;
+    const start = acc/total*360; acc += c.value; const end = acc/total*360;
+    stops.push(`${c.color} ${start}deg ${end}deg`);
+  }
+  return `conic-gradient(${stops.join(',')})`;
+}
+
+function donutBlock(title, counts){
+  const total = counts.reduce((a,c) => a + c.value, 0);
+  const bg = buildConic(counts);
+  const legend = counts.map(c => `<div><span class="dot" style="background:${c.color}"></span>${c.label}: ${c.value}</div>`).join('');
+  return `<div>
+    <h4>${title}</h4>
+    <div class="donut-block">
+      <div class="donut" style="background:${bg}"><div class="donut-total">${total}</div></div>
+      <div class="legend">${legend || '<span class="muted">no data</span>'}</div>
+    </div>
+  </div>`;
+}
+
+function statusCounts(rows, statusCol){
+  const buckets = {};
+  for(const r of rows){
+    const v = (r[statusCol] || 'unset').trim() || 'unset';
+    buckets[v] = (buckets[v]||0) + 1;
+  }
+  return Object.entries(buckets).map(([label,value]) => ({label, value, color: statusColor(label)}));
+}
+
+function rollupMetrics(rows){
+  const byStory = new Map();
+  for(const r of rows){
+    const id = r['Story ID'] || '(unknown)';
+    if(!byStory.has(id)) byStory.set(id, {id, duration:0, inTok:0, outTok:0, count:0, rows:[], layers:new Set(), tokSources:new Set()});
+    const g = byStory.get(id);
+    g.duration += numFrom(r['Duration (min)']);
+    g.inTok += numFrom(r['Input Tok']);
+    g.outTok += numFrom(r['Output Tok']);
+    g.count++;
+    g.rows.push(r);
+    if(r['Layer']) g.layers.add(r['Layer'].trim().toLowerCase());
+    if(r['Tok Source']) g.tokSources.add(r['Tok Source'].trim().toLowerCase());
+  }
+  for(const g of byStory.values()){
+    const last = g.rows[g.rows.length-1];
+    g.currentStage = last ? (last['Stage']||'') : '';
+    g.currentStatus = last ? (last['Status']||'') : '';
+    g.layerLabel = g.layers.size === 0 ? '' : g.layers.size > 1 ? 'both' : [...g.layers][0];
+    g.tokSourceLabel = g.tokSources.size === 0 ? '' : g.tokSources.size > 1 ? 'mixed' : [...g.tokSources][0];
+  }
+  return Array.from(byStory.values());
+}
+
+function tokenBarChart(storyRollups){
+  if(storyRollups.length === 0) return '<div class="barchart"><span class="muted">no metrics rows in scope</span></div>';
+  const max = Math.max(...storyRollups.map(s => s.inTok + s.outTok), 1);
+  const rows = storyRollups.map(s => {
+    const inPct = (s.inTok / max * 100).toFixed(1);
+    const outPct = (s.outTok / max * 100).toFixed(1);
+    return `<div class="row">
+      <div class="label" title="${s.id}">${s.id}</div>
+      <div class="track">
+        <div class="seg" style="width:${inPct}%;background:var(--blue);" title="Input: ${s.inTok}"></div>
+        <div class="seg" style="width:${outPct}%;background:var(--accent);" title="Output: ${s.outTok}"></div>
+      </div>
+      <div class="value">${s.inTok + s.outTok} tok / ${s.duration}m</div>
+    </div>`;
+  }).join('');
+  return `<div class="barchart">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;"><span class="dot" style="background:var(--blue);display:inline-block;"></span> input &nbsp; <span class="dot" style="background:var(--accent);display:inline-block;"></span> output</div>
+    ${rows}
+  </div>`;
+}
+
+function renderCommonStagePanel(highlightStage){
+  const metricsRows = visibleRows('metrics');
+  const byStage = STAGE_LIST.map(stage => {
+    const rows = metricsRows.filter(r => (r['Stage']||'').toLowerCase() === stage.toLowerCase());
+    return {
+      stage,
+      duration: rows.reduce((a,r) => a + numFrom(r['Duration (min)']), 0),
+      inTok: rows.reduce((a,r) => a + numFrom(r['Input Tok']), 0),
+      outTok: rows.reduce((a,r) => a + numFrom(r['Output Tok']), 0),
+      count: rows.length
+    };
+  });
+  const maxTok = Math.max(...byStage.map(s => s.inTok + s.outTok), 1);
+  const rows = byStage.map(s => {
+    const pct = ((s.inTok + s.outTok) / maxTok * 100).toFixed(1);
+    const hl = highlightStage && s.stage.toLowerCase() === highlightStage.toLowerCase();
+    return `<div class="row" style="${hl ? 'outline:1px solid var(--accent);border-radius:6px;padding:1px 2px;' : ''}">
+      <div class="label" style="${hl ? 'color:var(--accent);font-weight:700;' : ''}">${s.stage}${s.count ? '' : ' <span class=\"muted\">(0)</span>'}</div>
+      <div class="track"><div class="seg" style="width:${pct}%;background:${hl ? 'var(--accent)' : 'var(--blue)'};"></div></div>
+      <div class="value">${s.duration}m &middot; ${s.inTok + s.outTok} tok</div>
+    </div>`;
+  }).join('');
+  return `<div class="panel">
+    <h4>Time &amp; Tokens by Stage <span class="muted" style="text-transform:none;">(Workflow Metrics, current story selection)</span></h4>
+    <div class="barchart">${rows}</div>
+  </div>`;
+}
+
+function coverageSegBar(row){
+  const chains = ['LLD Mapped','Task Mapped','Code Mapped','Unit Test Mapped','Integration Test Mapped'];
+  return `<div class="seg-bar">${chains.map(c => `<div style="background:${statusColor(row[c])}" title="${c}: ${row[c]||''}"></div>`).join('')}</div>`;
+}
+
+function controlsHtml(key, rows, statusCol, layerCol, sourceCol){
+  const st = tabState[key] || (tabState[key] = {search:'', status:'', layer:'', source:''});
+  const statuses = [...new Set(rows.map(r => (r[statusCol]||'').trim()).filter(Boolean))];
+  const layers = [...new Set(rows.map(r => (r[layerCol]||'').trim()).filter(Boolean))];
+  const sources = [...new Set(rows.map(r => (r[sourceCol]||'').trim()).filter(Boolean))];
+  return `<div class="controls">
+    <input type="text" id="search-${key}" placeholder="Search rows..." value="${st.search}">
+    ${layerCol ? `<select id="layerf-${key}">
+      <option value="">All layers</option>
+      ${layers.map(l => `<option value="${l}" ${st.layer===l?'selected':''}>${l}</option>`).join('')}
+    </select>` : ''}
+    ${sourceCol ? `<select id="sourcef-${key}" title="Filter by original decomposition vs a specific Change Request">
+      <option value="">All sources</option>
+      ${sources.map(s => `<option value="${s}" ${st.source===s?'selected':''}>${s}</option>`).join('')}
+    </select>` : ''}
+    ${statusCol ? `<select id="statusf-${key}">
+      <option value="">All statuses</option>
+      ${statuses.map(s => `<option value="${s}" ${st.status===s?'selected':''}>${s}</option>`).join('')}
+    </select>` : ''}
+  </div>`;
+}
+
+function wireControls(key){
+  const st = tabState[key];
+  if(!st) return;
+  const search = document.getElementById(`search-${key}`);
+  if(search) search.addEventListener('input', () => { st.search = search.value; renderAll(); });
+  const sel = document.getElementById(`statusf-${key}`);
+  if(sel) sel.addEventListener('change', () => { st.status = sel.value; renderAll(); });
+  const layerSel = document.getElementById(`layerf-${key}`);
+  if(layerSel) layerSel.addEventListener('change', () => { st.layer = layerSel.value; renderAll(); });
+  const sourceSel = document.getElementById(`sourcef-${key}`);
+  if(sourceSel) sourceSel.addEventListener('change', () => { st.source = sourceSel.value; renderAll(); });
+}
+
+function tableHtml(cols, rows){
+  if(rows.length === 0) return '<p class="muted">No rows in current filter/folder selection.</p>';
+  return `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+  <tbody>${rows.map(r => `<tr>${cols.map(c => {
+    if(/^layer$/i.test(c)){
+      return `<td><span class="badge" style="background:${layerColor(r[c])}">${r[c]||''}</span></td>`;
+    }
+    if(/status/i.test(c)){
+      return `<td><span class="badge" style="background:${statusColor(r[c])}">${r[c]||''}</span></td>`;
+    }
+    if(/^tok source$/i.test(c)){
+      return `<td><span class="badge" style="background:${tokSourceColor(r[c])}">${r[c]||''}</span></td>`;
+    }
+    if(/^source$/i.test(c)){
+      return `<td><span class="badge" style="background:${crSourceColor(r[c])}">${r[c]||'original'}</span></td>`;
+    }
+    return `<td>${r[c] ?? ''}</td>`;
+  }).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+function renderGenericTab(key){
+  const raw = visibleRows(key);
+  const filtered = applyFilters(key, raw);
+  const cols = raw.length ? Object.keys(raw[0]).filter(c => !c.startsWith('__')) : DEFAULT_COLS[key];
+  const statusCol = cols.find(c => /status/i.test(c));
+  const layerCol = cols.find(c => /^layer$/i.test(c));
+  const sourceCol = cols.find(c => /^source$/i.test(c));
+  const donut = statusCol ? donutBlock('Status distribution', statusCounts(filtered, statusCol)) : '';
+  return `
+    <div class="panel"><div class="charts-row">${donut}</div></div>
+    <div class="panel">
+      ${controlsHtml(key, raw, statusCol, layerCol, sourceCol)}
+      ${tableHtml(cols, filtered)}
+    </div>
+  `;
+}
+
+function renderCoverageTab(){
+  const key = 'coverage';
+  const raw = visibleRows(key);
+  const filtered = applyFilters(key, raw);
+  const statusCol = 'Overall Status';
+  const layerCol = 'Layer';
+  const donut = donutBlock('Overall status', statusCounts(filtered, statusCol));
+  const rowsHtml = filtered.length ? filtered.map(r => `<div class="row" style="display:flex;align-items:center;gap:10px;margin:6px 0;">
+      <span class="badge" style="background:${layerColor(r[layerCol])};width:64px;text-align:center;">${r[layerCol]||''}</span>
+      <div style="width:110px;flex-shrink:0;font-size:12px;">${r['Req ID']||''}</div>
+      ${coverageSegBar(r)}
+      <span class="badge" style="background:${statusColor(r[statusCol])}">${r[statusCol]||''}</span>
+    </div>`).join('') : '<p class="muted">No coverage rows in scope.</p>';
+  return `
+    <div class="panel"><div class="charts-row">${donut}
+      <div style="font-size:11px;color:var(--muted);">Segment order per row: LLD → Task → Code → Unit Test → Integration Test mapping status. Integration Test Mapped is only meaningful for Layer=backend rows (frontend tasks skip integration testing). Use the Layer filter below to isolate one layer's chain.</div>
+    </div></div>
+    <div class="panel">
+      ${controlsHtml(key, raw, statusCol, layerCol)}
+      <div style="margin-bottom:8px;">${rowsHtml}</div>
+      ${tableHtml(DEFAULT_COLS.coverage, filtered)}
+    </div>
+  `;
+}
+
+function renderMetricsTab(){
+  const key = 'metrics';
+  const raw = visibleRows(key);
+  const filtered = applyFilters(key, raw);
+  const rollups = rollupMetrics(filtered);
+  const statusDonut = donutBlock('Current status by story', statusCounts(rollups.map(r => ({Status:r.currentStatus})), 'Status'));
+  const bars = tokenBarChart(rollups);
+  const totalTok = rollups.reduce((a,r) => a + r.inTok + r.outTok, 0);
+  const totalDur = rollups.reduce((a,r) => a + r.duration, 0);
+  const rollupRows = rollups.map((r,i) => `
+    <tr class="expand-row" data-idx="${i}">
+      <td>${r.id}</td>
+      <td>${r.layerLabel ? `<span class="badge" style="background:${r.layerLabel==='both'?getComputedStyle(document.documentElement).getPropertyValue('--gray').trim():layerColor(r.layerLabel)}">${r.layerLabel}</span>` : '<span class="muted">-</span>'}</td>
+      <td>${r.currentStage||'<span class="muted">-</span>'}</td>
+      <td><span class="badge" style="background:${statusColor(r.currentStatus)}">${r.currentStatus||'unset'}</span></td>
+      <td>${r.duration}</td><td>${r.inTok}</td><td>${r.outTok}</td>
+      <td>${r.tokSourceLabel ? `<span class="badge" style="background:${r.tokSourceLabel==='mixed'?getComputedStyle(document.documentElement).getPropertyValue('--gray').trim():tokSourceColor(r.tokSourceLabel)}">${r.tokSourceLabel}</span>` : '<span class="muted">-</span>'}</td>
+      <td>${r.count}</td>
+    </tr>
+    <tr class="history" id="hist-${i}" style="display:none;"><td colspan="9">
+      ${tableHtml(DEFAULT_COLS.metrics, r.rows)}
+    </td></tr>
+  `).join('');
+  const html = `
+    <div class="cards">
+      <div class="card"><div class="num">${rollups.length}</div><div class="lbl">Stories</div></div>
+      <div class="card"><div class="num">${totalDur}</div><div class="lbl">Total minutes</div></div>
+      <div class="card"><div class="num">${totalTok}</div><div class="lbl">Total tokens</div></div>
+    </div>
+    <div class="panel"><div class="charts-row">${statusDonut}${bars}</div></div>
+    <div class="panel">
+      ${controlsHtml(key, raw, 'Status', 'Layer')}
+      <p class="muted" style="font-size:11px;">Rollup per Story ID, summed across all command rows in scope (use the Layer filter above to roll up just one layer). Current Stage/Status taken from the latest row (chronological/revision-append order). Layer column shows "both" when a story's rows in scope span frontend and backend. Tok Source shows "mixed" when a story's rows span both actual and estimated capture. Click a row to expand full command history. 0 shown where no metrics rows exist.</p>
+      <table><thead><tr><th>Story ID</th><th>Layer</th><th>Current Stage</th><th>Current Status</th><th>Total Duration</th><th>Input Tok</th><th>Output Tok</th><th>Tok Source</th><th># Commands</th></tr></thead>
+      <tbody>${rollupRows || '<tr><td colspan="9" class="muted">No metrics rows in scope.</td></tr>'}</tbody></table>
+    </div>
+  `;
+  return html;
+}
+
+function renderChangeRequestsTab(){
+  const key = 'changeRequests';
+  const st = tabState[key] || (tabState[key] = {search:'', status:''});
+  const statusCol = 'Bundle Status';
+  const filtered = crEntries.filter(r => {
+    if(st.status && (r[statusCol]||'').toLowerCase() !== st.status.toLowerCase()) return false;
+    if(st.search){
+      const hay = Object.keys(r).filter(k => !k.startsWith('__')).map(k => r[k]).join(' ').toLowerCase();
+      if(!hay.includes(st.search.toLowerCase())) return false;
+    }
+    return true;
+  });
+  const donut = donutBlock('Bundle status distribution', statusCounts(filtered, statusCol));
+  const rows = filtered.map((r, i) => {
+    const cascadeBtn = r.__cascade ? `<span class="muted" style="cursor:pointer;text-decoration:underline;">show cascade impact</span>` : '<span class="muted">-</span>';
+    return `
+    <tr class="expand-row" data-idx="${i}">
+      <td>${r['CR ID']||''}</td>
+      <td>${r['Role']||''}</td>
+      <td>${r['Originating Story']||''}</td>
+      <td>${r.__storyId||''}</td>
+      <td>${r['Date']||''}</td>
+      <td><span class="badge" style="background:${statusColor(r[statusCol])}">${r[statusCol]||''}</span></td>
+      <td>${r['Spawned Task IDs']||''}</td>
+      <td>${cascadeBtn}</td>
+    </tr>
+    <tr class="history" id="cr-hist-${i}" style="display:none;"><td colspan="8">
+      ${tableHtml(DEFAULT_COLS.changeRequests, [r])}
+      ${r.__cascade ? `<h4 style="margin-top:12px;">Cascade Impact (CR-3 walk result)</h4>${tableHtml(r.__cascade.headers, r.__cascade.rows.map(row => { const o={}; r.__cascade.headers.forEach((h,j)=>o[h]=row[j]??''); return o; }))}` : ''}
+    </td></tr>`;
+  }).join('');
+  return `
+    <div class="cards">
+      <div class="card"><div class="num">${crEntries.length}</div><div class="lbl">CR entries loaded</div></div>
+      <div class="card"><div class="num">${new Set(crEntries.map(r=>r['CR ID'])).size}</div><div class="lbl">Distinct CR IDs</div></div>
+      <div class="card"><div class="num">${crEntries.filter(r=>(r['Role']||'').toLowerCase()==='cascaded').length}</div><div class="lbl">Cascaded entries</div></div>
+    </div>
+    <div class="panel"><div class="charts-row">${donut}
+      <div style="font-size:11px;color:var(--muted);">Sourced from <code>## Change Request: CR-&lt;n&gt;</code> sections in progress files (pick a <code>spec/progress</code> folder above). Not gated by the Stories sidebar — that filters traceability data only. Click a row to expand its full entry and Cascade Impact table (present on the originating story's entry only).</div>
+    </div></div>
+    <div class="panel">
+      <div class="controls">
+        <input type="text" id="search-changeRequests" placeholder="Search rows..." value="${st.search}">
+        <select id="statusf-changeRequests">
+          <option value="">All bundle statuses</option>
+          ${[...new Set(crEntries.map(r => (r[statusCol]||'').trim()).filter(Boolean))].map(s => `<option value="${s}" ${st.status===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <table><thead><tr><th>CR ID</th><th>Role</th><th>Originating Story</th><th>Story</th><th>Date</th><th>Bundle Status</th><th>Spawned Task IDs</th><th>Detail</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" class="muted">No Change Request entries loaded. Pick a spec/progress folder above.</td></tr>'}</tbody></table>
+    </div>
+  `;
+}
+
+function renderAll(){
+  const container = document.getElementById('tabContent');
+  let html;
+  if(activeTab === 'coverage') html = renderCoverageTab();
+  else if(activeTab === 'metrics') html = renderMetricsTab();
+  else if(activeTab === 'changeRequests') html = renderChangeRequestsTab();
+  else html = renderGenericTab(activeTab);
+  container.innerHTML = (activeTab === 'changeRequests' ? '' : renderCommonStagePanel(TAB_STAGE[activeTab])) + html;
+  if(activeTab === 'changeRequests'){
+    const search = document.getElementById('search-changeRequests');
+    if(search) search.addEventListener('input', () => { tabState.changeRequests.search = search.value; renderAll(); });
+    const sel = document.getElementById('statusf-changeRequests');
+    if(sel) sel.addEventListener('change', () => { tabState.changeRequests.status = sel.value; renderAll(); });
+  } else {
+    wireControls(activeTab);
+  }
+  if(activeTab === 'metrics' || activeTab === 'changeRequests'){
+    container.querySelectorAll('.expand-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const prefix = activeTab === 'changeRequests' ? 'cr-hist-' : 'hist-';
+        const h = document.getElementById(`${prefix}${row.dataset.idx}`);
+        h.style.display = h.style.display === 'none' ? 'table-row' : 'none';
+      });
+    });
+  }
+  renderSummaryCards();
+}
+
+function renderSummaryCards(){
+  const el = document.getElementById('summaryCards');
+  const reqRows = visibleRows('reqToLld');
+  const covRows = visibleRows('coverage');
+  // 'done' is treated as complete here too — some shards record Overall Status as 'done' rather
+  // than the canonical 'complete' (matches the green bucket statusColor() already gives 'done').
+  const completeCount = covRows.filter(r => /complete|mapped|done/i.test(r['Overall Status']||'')).length;
+  const pct = covRows.length ? Math.round(completeCount/covRows.length*100) : 0;
+  el.innerHTML = `
+    <div class="card"><div class="num">${allLeaves.length}</div><div class="lbl">Story shards found</div></div>
+    <div class="card"><div class="num">${checkedLeaves.size}</div><div class="lbl">In scope</div></div>
+    <div class="card"><div class="num">${reqRows.length}</div><div class="lbl">Requirements</div></div>
+    <div class="card"><div class="num">${pct}%</div><div class="lbl">Coverage complete</div></div>
+  `;
+}
+</script>
+</body>
+</html>

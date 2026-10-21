@@ -1,0 +1,19 @@
+description = "Run CR eligibility check and cascade for a change request."
+prompt = """
+Read `spec/commands/speccraft.change.md` and `spec/workflows/change-request/CHANGE-REQUEST-STAGE.md` in full, then run the CR Eligibility Check and cascade for the CR file and story ID provided.
+
+Input: {{args}}
+
+Rules before starting:
+- classify the request via the CR Eligibility Check first — proceed only if it resolves to "Change Request"; anything else, refuse and redirect
+- confirm every one of the original story's in-scope LLD(s) is `approved`/`done` — `LLD-FRONTEND-<id>.md` and `LLD-BACKEND-<id>.md` both, when Layer Scope = both — if any is not, stop and point to /speccraft.tech-design
+- read `spec/traceability/shared/STORY-DEPENDENCIES.md`; confirm Backward/Forward rows mirror for the story and everything reachable below it
+- run Pass 1 (read-only): check the story's own backward deps, then walk its forward dependents transitively, pruning unaffected branches, marking compatible ones, tracking visited IDs for a cycle guard
+- any conflict or integrity error anywhere blocks the entire run — write nothing
+- only if Pass 1 is fully clean, run Pass 2: write the LLD delta + decomposition delta for the story and every compatible cascaded story, in the companion file(s) each Touchpoint actually names, continuing each story's own ID/task numbering
+- after producing the bundle (or blocking): output the walked-story list + bundle summary or block reason + minimal handoff block, then STOP
+- do not self-approve any part of the bundle
+- wait for human approval covering the whole bundle before any downstream stage runs
+
+The canonical contract documents the full two-pass, atomic cascade mechanism — this stub only summarizes the entry rules.
+"""

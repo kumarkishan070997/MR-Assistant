@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PR / MR Context Anchor Settings</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body class="w-[360px] bg-slate-50 text-slate-900 p-4 font-sans text-sm">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+      <div>
+        <h1 class="text-base font-bold text-slate-900">Context Anchor</h1>
+        <p class="text-xs text-slate-500">PR / MR Review Assistant</p>
+      </div>
+      <span class="px-2 py-0.5 text-xs font-mono bg-blue-100 text-blue-700 rounded-full font-medium">v0.1.0</span>
+    </div>
+
+    <!-- GitHub Card -->
+    <div class="mt-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-1.5 font-semibold text-slate-800">
+          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub Authentication
+        </div>
+        <span id="gh-rate-badge" class="text-[11px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 hidden"></span>
+      </div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Personal Access Token (classic or fine-grained)</label>
+      <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" class="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50" />
+      <div class="flex items-center justify-between mt-2.5">
+        <button id="gh-test-btn" class="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors">Test Connection</button>
+        <span id="gh-status" class="text-xs"></span>
+      </div>
+    </div>
+
+    <!-- GitLab Card -->
+    <div class="mt-3 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-1.5 font-semibold text-slate-800">
+          <svg class="w-4 h-4 fill-orange-600" viewBox="0 0 24 24"><path d="M23.955 13.587l-1.342-4.135-2.664-8.189c-.135-.423-.73-.423-.867 0L16.418 9.45H7.582L4.918 1.263c-.136-.423-.731-.423-.867 0L1.387 9.452.045 13.587a.937.937 0 00.34 1.047l11.615 8.439 11.615-8.439a.937.937 0 00.34-1.047"/></svg>
+          GitLab Configuration
+        </div>
+      </div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Instance Base URL</label>
+      <input type="text" id="gl-url" placeholder="https://gitlab.com" value="https://gitlab.com" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50 mb-2 font-mono" />
+      
+      <label class="block text-xs font-medium text-slate-600 mb-1">Personal Access Token (`api` or `read_api` scope)</label>
+      <input type="password" id="gl-token" placeholder="glpat-xxxxxxxxxxxx" class="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50" />
+      
+      <div class="flex items-center justify-between mt-2.5">
+        <button id="gl-test-btn" class="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors">Test Connection</button>
+        <span id="gl-status" class="text-xs"></span>
+      </div>
+    </div>
+
+    <!-- General Settings -->
+    <div class="mt-3 bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between">
+      <div>
+        <div class="text-xs font-semibold text-slate-800">Auto Blast Radius</div>
+        <div class="text-[11px] text-slate-500">Scan modified declarations automatically</div>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" id="auto-blast" class="sr-only peer" checked />
+        <div class="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+      </label>
+    </div>
+
+    <!-- Actions -->
+    <div class="mt-4 flex items-center justify-end gap-2">
+      <button id="save-btn" class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded text-xs transition-colors shadow-sm">Save Preferences</button>
+    </div>
+    <div id="save-msg" class="text-center text-xs mt-1.5 text-emerald-600 font-medium hidden">Saved successfully</div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

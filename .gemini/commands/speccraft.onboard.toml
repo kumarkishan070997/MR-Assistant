@@ -1,0 +1,17 @@
+description = "Onboard an existing (brownfield) application by discovering its architecture from code."
+prompt = """
+Read `spec/commands/speccraft.onboard.md`, `spec/AGENTS.md`, and `spec/architecture/README.md` in full, then onboard the existing application described by the input.
+
+Input: {{args}}
+
+Rules before starting:
+- confirm `spec/architecture/ARCH-DECISIONS.md` does not already have real `AD-FRONTEND-*`/`AD-BACKEND-*` content — if it does, stop and report; this command does not re-sync an already-populated file
+- ask Layer Scope interactively in chat (`frontend` / `backend` / `both`) — never infer it from which code root exists or from scan results
+- for each confirmed layer, locate its existing code (`src-code-frontend/`/`src-code-backend/` first, else the provided path) — never assume a path
+- scan and split findings into Tier 1 (LLD-required stack decisions only — the enumerated `AD-FRONTEND-*`/`AD-BACKEND-*`/`AD-X-*` set) and Tier 2 (everything else — `rules/`/`skills/` content), each with file:line evidence
+- present both tiers together for review; only write on `approved` — respond `approved` / `revise: [reason]` / `blocked: [reason]`
+- write Tier 2 to whichever root the code actually lives in (`src-code-frontend/`/`src-code-backend/` if already there, else the provided path) — never move or relocate existing code
+- report the minimal handoff block from `spec/commands/speccraft.onboard.md`, then STOP — do not chain into `/speccraft.scaffold` or any planning stage
+
+The canonical contract documents the `/speccraft.onboard [path]` signature — no `frontend|backend|both` CLI argument, Layer Scope is always asked interactively.
+"""
