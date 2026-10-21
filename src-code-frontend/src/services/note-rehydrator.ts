@@ -181,7 +181,7 @@ export class NoteRehydrator {
 
     const rows = Array.from(rowsSet);
     if (rows.length > 0) {
-      console.log(`[Context Anchor] Processing ${rows.length} diff rows (from ${lineCells.length} line cells) on ${this.context.platform}...`);
+      console.log(`[PeerPilot] Processing ${rows.length} diff rows (from ${lineCells.length} line cells) on ${this.context.platform}...`);
       await this.processRowsChunked(rows);
     }
   }
@@ -333,7 +333,7 @@ export class NoteRehydrator {
           }
         }
 
-        console.log(`[Context Anchor] Blast Badge: detected ${decl.kind} "${decl.symbol}" (class: ${enclosingClass || 'none'}) on line ${lineNumber}`);
+        console.log(`[PeerPilot] Blast Badge: detected ${decl.kind} "${decl.symbol}" (class: ${enclosingClass || 'none'}) on line ${lineNumber}`);
         const badge = document.createElement('anchor-blast-badge') as AnchorBlastBadge;
         badge.symbol = decl.symbol;
         badge.enclosingClass = enclosingClass || '';

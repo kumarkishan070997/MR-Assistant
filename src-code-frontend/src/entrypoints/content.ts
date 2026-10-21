@@ -15,6 +15,8 @@ import { globalStorageService } from '../services/storage.service';
 import { NoteRehydrator } from '../services/note-rehydrator';
 import { AnchorOverlayRoot } from '../components/overlay/overlay-root';
 import { extractFilePath } from '../services/file-path-resolver';
+import { FileTrackerService } from '../services/file-tracker';
+import { loadReviewProgress } from '../stores/review-progress.store';
 
 export default defineContentScript({
   matches: ['*://*/*'],
@@ -27,7 +29,7 @@ export default defineContentScript({
       return;
     }
 
-    console.log('[Context Anchor] Content script activated on PR/MR:', window.location.href);
+    console.log('[PeerPilot] Content script activated on PR/MR:', window.location.href);
 
     // Load user settings from chrome.storage
     await loadSettings();
@@ -50,11 +52,17 @@ export default defineContentScript({
     let currentRehydrator: NoteRehydrator | null = null;
 
     lifecycle.onNavigate(async (adapter, context) => {
-      console.log(`[Context Anchor] Active on ${context.platform}: ${context.projectPath} (#${context.pullNumber})`);
+      console.log(`[PeerPilot] Active on ${context.platform}: ${context.projectPath} (#${context.pullNumber})`);
       overlayRoot?.setAdapterAndContext(adapter, context);
 
       // Load session notes from storage for this PR/MR
       await globalStorageService.loadNotesForReview(context.platform, context.projectPath, context.pullNumber);
+
+      // Load review progress from storage
+      await loadReviewProgress(context.platform, context.projectPath, context.pullNumber);
+
+      // Start file tracker for review check-offs
+      FileTrackerService.start();
 
       // Restart note rehydrator for the active view
       currentRehydrator?.stop();

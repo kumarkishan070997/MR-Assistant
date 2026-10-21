@@ -370,6 +370,14 @@ export class AnchorScratchpad extends AnchorBaseElement {
   }
 
   private persistNote(immediate = false) {
+    if (!this.content || !this.content.trim()) {
+      if (this.noteId) {
+        globalStorageService.deleteNote(this.noteId);
+      }
+      this.saveStatus = 'idle';
+      return;
+    }
+
     const notePayload: LineNote = {
       id: this.noteId,
       platform: this.platform,
@@ -459,35 +467,47 @@ export class AnchorScratchpad extends AnchorBaseElement {
       codeSnippet = codeCell?.textContent?.trim() || '';
     }
 
+    const initialContent = this.content ? `${this.content.trim()}\n\n` : '';
     this.isAiThinking = true;
-    this.aiStatusMessage = `AI analyzing (${action.replace('_', ' ')})...`;
+    this.aiStatusMessage = `PeerPilot AI generating (${action.replace('_', ' ')})...`;
+
+    if (action === 'spot_bugs') {
+      this.tag = 'bug';
+    } else if (action === 'suggest_fix' || action === 'unit_test') {
+      this.tag = 'suggestion';
+    } else if (action === 'explain') {
+      this.tag = 'question';
+    }
+    this.activeTab = 'split';
 
     try {
-      const res = await AIService.executeAction(settings.ai, action, {
-        filePath: this.filePath,
-        lineNumber: this.lineNumber,
-        codeSnippet,
-        userDraft: this.content,
-      });
+      const res = await AIService.executeAction(
+        settings.ai,
+        action,
+        {
+          filePath: this.filePath,
+          lineNumber: this.lineNumber,
+          codeSnippet,
+          userDraft: this.content,
+        },
+        (_chunk, accumulated) => {
+          if (action === 'polish_note') {
+            this.content = accumulated;
+          } else {
+            this.content = `${initialContent}${accumulated}`;
+          }
+          this.requestUpdate();
+        }
+      );
 
       if (res.success && res.text) {
         if (action === 'polish_note') {
           this.content = res.text;
         } else {
-          this.content = this.content ? `${this.content.trim()}\n\n${res.text}` : res.text;
+          this.content = `${initialContent}${res.text}`;
         }
-
-        if (action === 'spot_bugs') {
-          this.tag = 'bug';
-        } else if (action === 'suggest_fix' || action === 'unit_test') {
-          this.tag = 'suggestion';
-        } else if (action === 'explain') {
-          this.tag = 'question';
-        }
-
-        this.activeTab = 'split';
         this.persistNote(true);
-      } else {
+      } else if (!res.success) {
         alert(res.error || 'AI generation failed');
       }
     } catch (err: unknown) {
@@ -506,6 +526,36 @@ export class AnchorScratchpad extends AnchorBaseElement {
   }
 
   private toggleCollapse() {
+    if (!this.content || !this.content.trim()) {
+      if (this.noteId) {
+        globalStorageService.deleteNote(this.noteId);
+      }
+      this.dispatchEvent(
+        new CustomEvent('anchor-delete-note', {
+          bubbles: true,
+          composed: true,
+          detail: { noteId: this.noteId },
+        })
+      );
+      const scratchpadRow = this.closest('tr.anchor-scratchpad-row');
+      if (scratchpadRow) {
+        const targetRow = scratchpadRow.previousElementSibling as HTMLTableRowElement | null;
+        if (targetRow) {
+          const pin = targetRow.querySelector('.anchor-pin-btn') as HTMLElement | null;
+          if (pin) {
+            pin.classList.remove('has-note');
+            pin.style.color = '#656d76';
+            pin.style.opacity = '0.75';
+            pin.title = 'Add private line note';
+          }
+        }
+        scratchpadRow.remove();
+      } else {
+        this.remove();
+      }
+      return;
+    }
+
     this.isCollapsed = !this.isCollapsed;
     this.persistNote(true);
   }

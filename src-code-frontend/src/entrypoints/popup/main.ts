@@ -21,6 +21,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const aiTestBtn = document.getElementById('ai-test-btn') as HTMLButtonElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 
+  const revStrictnessSelect = document.getElementById('rev-strictness') as HTMLSelectElement;
+  const revSecCheckbox = document.getElementById('rev-sec') as HTMLInputElement;
+  const revPerfCheckbox = document.getElementById('rev-perf') as HTMLInputElement;
+  const revConcurCheckbox = document.getElementById('rev-concur') as HTMLInputElement;
+  const revErrCheckbox = document.getElementById('rev-err') as HTMLInputElement;
+  const revArchCheckbox = document.getElementById('rev-arch') as HTMLInputElement;
+  const revCustomInstructions = document.getElementById('rev-custom-instructions') as HTMLTextAreaElement;
+
   const ghStatus = document.getElementById('gh-status') as HTMLSpanElement;
   const glStatus = document.getElementById('gl-status') as HTMLSpanElement;
   const aiStatus = document.getElementById('ai-status') as HTMLSpanElement;
@@ -46,6 +54,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (settings.ai.provider === 'custom') {
       aiCustomGroup.classList.remove('hidden');
     }
+  }
+
+  if (settings.review) {
+    if (revStrictnessSelect) revStrictnessSelect.value = settings.review.strictness || 'critical';
+    if (revSecCheckbox) revSecCheckbox.checked = settings.review.focusAreas.security;
+    if (revPerfCheckbox) revPerfCheckbox.checked = settings.review.focusAreas.performance;
+    if (revConcurCheckbox) revConcurCheckbox.checked = settings.review.focusAreas.concurrency;
+    if (revErrCheckbox) revErrCheckbox.checked = settings.review.focusAreas.errorHandling;
+    if (revArchCheckbox) revArchCheckbox.checked = settings.review.focusAreas.architecture;
+    if (revCustomInstructions) revCustomInstructions.value = settings.review.customInstructions || '';
   }
 
   aiProviderSelect.addEventListener('change', () => {
@@ -197,6 +215,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         apiKey: aiKeyInput.value.trim(),
         model: aiModelInput.value.trim(),
         customEndpoint: aiEndpointInput.value.trim(),
+      },
+      review: {
+        strictness: (revStrictnessSelect?.value as any) || 'critical',
+        ignoreFormatting: true,
+        focusAreas: {
+          security: revSecCheckbox?.checked ?? true,
+          performance: revPerfCheckbox?.checked ?? true,
+          concurrency: revConcurCheckbox?.checked ?? true,
+          errorHandling: revErrCheckbox?.checked ?? true,
+          architecture: revArchCheckbox?.checked ?? true,
+        },
+        customInstructions: revCustomInstructions?.value.trim() || '',
       },
       general: {
         auto_blast_radius: autoBlastCheckbox.checked,

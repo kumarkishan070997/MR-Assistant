@@ -8,11 +8,14 @@
   </head>
   <body class="w-[360px] bg-slate-50 text-slate-900 p-4 font-sans text-sm">
     <div class="flex items-center justify-between pb-3 border-b border-slate-200">
-      <div>
-        <h1 class="text-base font-bold text-slate-900">Context Anchor</h1>
-        <p class="text-xs text-slate-500">PR / MR Review Assistant</p>
+      <div class="flex items-center gap-2.5">
+        <img src="/icons/icon-32.png" alt="PeerPilot" class="w-7 h-7 rounded-lg shadow-sm" />
+        <div>
+          <h1 class="text-base font-bold text-slate-900 tracking-tight leading-tight">PeerPilot</h1>
+          <p class="text-[11px] text-slate-500 font-medium">AI Code Review Pair-Pilot</p>
+        </div>
       </div>
-      <span class="px-2 py-0.5 text-xs font-mono bg-blue-100 text-blue-700 rounded-full font-medium">v0.1.0</span>
+      <span class="px-2 py-0.5 text-xs font-mono bg-cyan-100 text-cyan-800 rounded-full font-semibold">v0.2.0</span>
     </div>
 
     <!-- GitHub Card -->
@@ -94,6 +97,63 @@
         <div class="flex items-center justify-between pt-1">
           <button id="ai-test-btn" class="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors">Test AI Key</button>
           <span id="ai-status" class="text-xs"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Critical Reviewer Persona & Rules Card -->
+    <div class="mt-3 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+      <div class="flex items-center gap-1.5 font-semibold text-slate-800 mb-2">
+        <svg class="w-4 h-4 text-amber-500 fill-current" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v2h-2V7zm0 4h2v6h-2v-6z"/></svg>
+        Critical Reviewer Persona & Rules
+      </div>
+      
+      <div class="space-y-2.5">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Strictness Level</label>
+          <select id="rev-strictness" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-slate-50">
+            <option value="critical">🚨 Critical Only (Exploits, blockers, fatal performance)</option>
+            <option value="high">⚠️ High & Critical (Security risks, N+1 queries, fatal flaws)</option>
+            <option value="comprehensive">🔍 Comprehensive (All technical risks, zero formatting)</option>
+          </select>
+        </div>
+
+        <div>
+          <div class="text-xs font-medium text-slate-600 mb-1.5">Critical Focus Areas</div>
+          <div class="space-y-1.5 text-xs text-slate-700">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="rev-sec" class="rounded text-amber-600 focus:ring-amber-500" checked />
+              <span>🛡️ Security & Vulnerabilities (SQLi, XSS, Auth)</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="rev-perf" class="rounded text-amber-600 focus:ring-amber-500" checked />
+              <span>⚡ Database & N+1 Performance (Queries in loops)</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="rev-concur" class="rounded text-amber-600 focus:ring-amber-500" checked />
+              <span>🔄 Concurrency & Race Conditions</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="rev-err" class="rounded text-amber-600 focus:ring-amber-500" checked />
+              <span>💥 Error Handling & Resource Leaks</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="rev-arch" class="rounded text-amber-600 focus:ring-amber-500" checked />
+              <span>🏗️ Business Logic & Edge Cases</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-700 font-medium">
+            <input type="checkbox" id="rev-ignore-fmt" class="rounded text-amber-600 focus:ring-amber-500" checked disabled />
+            <span>🚫 Ignore spacing, styling & linter formatting (Enforced)</span>
+          </label>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Custom Project Rules / Guidelines</label>
+          <textarea id="rev-custom-instructions" rows="2" placeholder="e.g. We use PostgreSQL 16. Watch out for table locks in migrations. Ensure all API responses are paginated." class="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500 bg-slate-50 resize-none"></textarea>
         </div>
       </div>
     </div>

@@ -153,5 +153,51 @@ describe('StorageService & Notes Store', () => {
       expect(result[note2.id]).toBeUndefined();
       expect($activeNotes.get()[note1.id]).toBeDefined();
     });
+
+    it('ignores empty or whitespace-only notes from storage', async () => {
+      const emptyNote = {
+        id: buildNoteKey('github', 'owner/repo', '1', 'empty.ts', 5),
+        platform: 'github' as const,
+        projectPath: 'owner/repo',
+        pullNumber: '1',
+        filePath: 'empty.ts',
+        lineNumber: 5,
+        content: '   ',
+        isCollapsed: false,
+        createdAt: 1,
+        updatedAt: 1,
+      };
+
+      mockStorage['review_sessions'] = {
+        [emptyNote.id]: emptyNote,
+      };
+
+      const result = await service.loadNotesForReview('github', 'owner/repo', '1');
+      expect(Object.keys(result)).toHaveLength(0);
+      expect($activeNotes.get()[emptyNote.id]).toBeUndefined();
+    });
+  });
+
+  describe('Empty note prevention', () => {
+    it('deletes note if saveNoteImmediate is called with empty or whitespace content', async () => {
+      const noteId = buildNoteKey('github', 'owner/repo', '1', 'file.ts', 10);
+      const note: LineNote = {
+        id: noteId,
+        platform: 'github',
+        projectPath: 'owner/repo',
+        pullNumber: '1',
+        filePath: 'file.ts',
+        lineNumber: 10,
+        content: '   ',
+        isCollapsed: false,
+        createdAt: 1000,
+        updatedAt: 1000,
+      };
+
+      await service.saveNoteImmediate(note);
+      expect($activeNotes.get()[noteId]).toBeUndefined();
+      const stored = mockStorage['review_sessions'] as Record<string, LineNote> | undefined;
+      expect(stored?.[noteId]).toBeUndefined();
+    });
   });
 });
