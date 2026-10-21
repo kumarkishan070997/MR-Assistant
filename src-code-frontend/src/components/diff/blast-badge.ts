@@ -177,6 +177,7 @@ export class AnchorBlastBadge extends AnchorBaseElement {
         host: window.location.origin,
         projectPath: this.projectPath,
         reviewId: '1',
+        pullNumber: '1',
         baseRef: this.baseRef,
         headRef: 'head',
       };

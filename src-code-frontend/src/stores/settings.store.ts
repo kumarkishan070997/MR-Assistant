@@ -1,5 +1,13 @@
 import { atom } from 'nanostores';
 
+export interface AISettings {
+  enabled: boolean;
+  provider: 'gemini' | 'openai' | 'anthropic' | 'custom';
+  apiKey: string;
+  model: string;
+  customEndpoint?: string;
+}
+
 export interface ExtensionSettings {
   github: {
     pat: string;
@@ -10,6 +18,7 @@ export interface ExtensionSettings {
     base_url: string;
     custom_hosts: string[];
   };
+  ai: AISettings;
   general: {
     auto_blast_radius: boolean;
     theme_mode: 'auto' | 'light' | 'dark';
@@ -25,6 +34,13 @@ export const defaultSettings: ExtensionSettings = {
     pat: '',
     base_url: 'https://gitlab.com',
     custom_hosts: [],
+  },
+  ai: {
+    enabled: false,
+    provider: 'gemini',
+    apiKey: '',
+    model: 'gemini-2.5-flash',
+    customEndpoint: '',
   },
   general: {
     auto_blast_radius: true,
@@ -45,6 +61,7 @@ export async function loadSettings(): Promise<ExtensionSettings> {
         const merged: ExtensionSettings = {
           github: { ...defaultSettings.github, ...data.settings.github },
           gitlab: { ...defaultSettings.gitlab, ...data.settings.gitlab },
+          ai: { ...defaultSettings.ai, ...data.settings.ai },
           general: { ...defaultSettings.general, ...data.settings.general },
         };
         $settings.set(merged);
@@ -66,6 +83,7 @@ export async function saveSettings(updated: Partial<ExtensionSettings>): Promise
     github: { ...current.github, ...updated.github },
     gitlab: { ...current.gitlab, ...updated.gitlab },
     general: { ...current.general, ...updated.general },
+    ai: { ...current.ai, ...updated.ai },
   };
 
   $settings.set(next);

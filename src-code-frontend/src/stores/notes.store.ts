@@ -1,5 +1,7 @@
 import { map } from 'nanostores';
 
+export type NoteTag = 'blocker' | 'bug' | 'suggestion' | 'question' | 'nitpick' | 'praise';
+
 export interface LineNote {
   id: string; // Canonical key: {platform}_{projectPath}_{pullNumber}_{filePath}_{lineNumber}
   platform: 'github' | 'gitlab';
@@ -12,6 +14,7 @@ export interface LineNote {
   createdAt: number;
   updatedAt: number;
   promoted?: boolean;
+  tag?: NoteTag;
 }
 
 export function buildNoteKey(

@@ -14,6 +14,7 @@ import { loadSettings, $settings } from '../stores/settings.store';
 import { globalStorageService } from '../services/storage.service';
 import { NoteRehydrator } from '../services/note-rehydrator';
 import { AnchorOverlayRoot } from '../components/overlay/overlay-root';
+import { extractFilePath } from '../services/file-path-resolver';
 
 export default defineContentScript({
   matches: ['*://*/*'],
@@ -88,28 +89,77 @@ export default defineContentScript({
         return;
       }
 
-      const selectedText = selection.toString();
-      const sanitized = sanitizeSymbol(selectedText);
-
-      if (!sanitized) {
+      const selectedText = selection.toString().trim();
+      if (!selectedText || selectedText.length < 1) {
         overlayRoot.hideTrigger();
         return;
       }
 
       const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
+      const containerNode = range.commonAncestorContainer;
+      const containerEl = containerNode instanceof Element ? containerNode : containerNode.parentElement;
 
+      // Verify selection is within a diff container or diff table
+      const diffContainer = containerEl?.closest(
+        'table.diff-table, table.code, diff-file, .diff-file, .file-holder, .file, .diff-content, [data-blob-path], .js-diff-line, tr.line_holder, tr.diff-tr'
+      );
+      if (!diffContainer) {
+        overlayRoot.hideTrigger();
+        return;
+      }
+
+      const targetRow = (containerEl?.closest('tr, .line_holder, .diff-tr') || containerEl?.parentElement?.closest('tr')) as HTMLTableRowElement | null;
+
+      let lineNumber = 0;
+      let filePath = '';
+
+      if (targetRow) {
+        filePath = extractFilePath(targetRow);
+
+        const lineLinks = Array.from(targetRow.querySelectorAll<HTMLElement>('[data-linenumber], [data-line-number]'));
+        if (lineLinks.length > 0) {
+          const target = lineLinks[lineLinks.length - 1];
+          lineNumber = parseInt(
+            target.getAttribute('data-linenumber') || target.getAttribute('data-line-number') || target.textContent?.trim() || '0',
+            10
+          );
+        }
+        if (lineNumber <= 0) {
+          const numCell = targetRow.querySelector<HTMLElement>('td.blob-num, td.diff-line-num, td.new_line, td.old_line, td.line_numbers, .diff-line-num');
+          if (numCell) {
+            lineNumber = parseInt(
+              numCell.getAttribute('data-line-number') || numCell.getAttribute('data-linenumber') || numCell.textContent?.trim() || '0',
+              10
+            );
+          }
+        }
+      }
+
+      if ((!filePath || filePath === 'unknown_file') && containerEl) {
+        filePath = extractFilePath(containerEl);
+      }
+
+      const sanitized = sanitizeSymbol(selectedText);
+
+      const rect = range.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) {
         overlayRoot.hideTrigger();
         return;
       }
 
-      // Position trigger above the selection or fallback below if near top of viewport
-      const y = rect.top >= 36 ? rect.top - 30 : rect.bottom + 6;
-      const x = Math.max(12, rect.left);
+      // Position toolbar neatly above selection, bounded within viewport
+      const y = rect.top >= 42 ? rect.top - 36 : rect.bottom + 8;
+      const x = Math.max(12, Math.min(rect.left, window.innerWidth - 380));
 
-      console.log(`[Context Anchor] Selected symbol: "${sanitized}" at (${Math.round(x)}, ${Math.round(y)})`);
-      overlayRoot.showTrigger(sanitized, x, y);
+      overlayRoot.showTrigger({
+        symbol: sanitized || '',
+        selectedText,
+        x,
+        y,
+        lineNumber,
+        filePath,
+        targetRow,
+      });
     };
 
     // Use capture phase so listeners trigger before host or third-party extensions stop propagation

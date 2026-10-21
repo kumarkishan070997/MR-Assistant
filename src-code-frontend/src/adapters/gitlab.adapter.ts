@@ -3,6 +3,7 @@ import {
   ReviewContext,
   DiffLineContext,
   SymbolReferenceResult,
+  SymbolReferenceMatch,
 } from './base.adapter';
 import { extractFilePath } from '../services/file-path-resolver';
 

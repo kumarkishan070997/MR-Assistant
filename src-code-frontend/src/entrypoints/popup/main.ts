@@ -1,6 +1,7 @@
 import { loadSettings, saveSettings, $settings } from '../../stores/settings.store';
 import { GitHubAdapter } from '../../adapters/github.adapter';
 import { GitLabAdapter } from '../../adapters/gitlab.adapter';
+import { AIService } from '../../services/ai/ai.service';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const ghTokenInput = document.getElementById('gh-token') as HTMLInputElement;
@@ -8,12 +9,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   const glTokenInput = document.getElementById('gl-token') as HTMLInputElement;
   const autoBlastCheckbox = document.getElementById('auto-blast') as HTMLInputElement;
 
+  const aiEnabledCheckbox = document.getElementById('ai-enabled') as HTMLInputElement;
+  const aiProviderSelect = document.getElementById('ai-provider') as HTMLSelectElement;
+  const aiKeyInput = document.getElementById('ai-key') as HTMLInputElement;
+  const aiModelInput = document.getElementById('ai-model') as HTMLInputElement;
+  const aiEndpointInput = document.getElementById('ai-endpoint') as HTMLInputElement;
+  const aiCustomGroup = document.getElementById('ai-custom-group') as HTMLDivElement;
+
   const ghTestBtn = document.getElementById('gh-test-btn') as HTMLButtonElement;
   const glTestBtn = document.getElementById('gl-test-btn') as HTMLButtonElement;
+  const aiTestBtn = document.getElementById('ai-test-btn') as HTMLButtonElement;
   const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 
   const ghStatus = document.getElementById('gh-status') as HTMLSpanElement;
   const glStatus = document.getElementById('gl-status') as HTMLSpanElement;
+  const aiStatus = document.getElementById('ai-status') as HTMLSpanElement;
   const ghRateBadge = document.getElementById('gh-rate-badge') as HTMLSpanElement;
   const saveMsg = document.getElementById('save-msg') as HTMLDivElement;
 
@@ -26,6 +36,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   glUrlInput.value = settings.gitlab.base_url || 'https://gitlab.com';
   glTokenInput.value = settings.gitlab.pat || '';
   autoBlastCheckbox.checked = settings.general.auto_blast_radius;
+
+  if (settings.ai) {
+    aiEnabledCheckbox.checked = settings.ai.enabled || false;
+    aiProviderSelect.value = settings.ai.provider || 'gemini';
+    aiKeyInput.value = settings.ai.apiKey || '';
+    aiModelInput.value = settings.ai.model || '';
+    aiEndpointInput.value = settings.ai.customEndpoint || '';
+    if (settings.ai.provider === 'custom') {
+      aiCustomGroup.classList.remove('hidden');
+    }
+  }
+
+  aiProviderSelect.addEventListener('change', () => {
+    const prov = aiProviderSelect.value;
+    if (prov === 'custom') {
+      aiCustomGroup.classList.remove('hidden');
+      aiModelInput.placeholder = 'llama3 / mistral';
+    } else {
+      aiCustomGroup.classList.add('hidden');
+      if (prov === 'gemini') aiModelInput.placeholder = 'gemini-2.5-flash';
+      if (prov === 'openai') aiModelInput.placeholder = 'gpt-4o-mini';
+      if (prov === 'anthropic') aiModelInput.placeholder = 'claude-3-5-sonnet-20241022';
+    }
+  });
 
   if (settings.github.rate_limit_remaining !== undefined) {
     ghRateBadge.textContent = `${settings.github.rate_limit_remaining} calls left`;
@@ -103,13 +137,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // AI Copilot Test Connection
+  aiTestBtn.addEventListener('click', async () => {
+    const provider = aiProviderSelect.value as any;
+    const apiKey = aiKeyInput.value.trim();
+    const model = aiModelInput.value.trim();
+    const customEndpoint = aiEndpointInput.value.trim();
+
+    aiStatus.textContent = 'Testing...';
+    aiStatus.className = 'text-xs text-slate-500 font-medium';
+    aiTestBtn.disabled = true;
+
+    const res = await AIService.testConnection({
+      enabled: true,
+      provider,
+      apiKey,
+      model,
+      customEndpoint,
+    });
+    aiTestBtn.disabled = false;
+
+    if (res.valid) {
+      aiStatus.textContent = 'Connected';
+      aiStatus.className = 'text-xs text-emerald-600 font-semibold';
+    } else {
+      aiStatus.textContent = res.error || 'Connection Failed';
+      aiStatus.className = 'text-xs text-rose-600 font-medium';
+    }
+  });
+
   // Save Preferences
   saveBtn.addEventListener('click', async () => {
     let cleanGlUrl = glUrlInput.value.trim() || 'https://gitlab.com';
     try {
       cleanGlUrl = new URL(cleanGlUrl).origin;
     } catch {
-      // Keep default
       cleanGlUrl = 'https://gitlab.com';
     }
 
@@ -128,6 +190,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         pat: glTokenInput.value.trim(),
         base_url: cleanGlUrl,
         custom_hosts: updatedCustomHosts,
+      },
+      ai: {
+        enabled: aiEnabledCheckbox.checked,
+        provider: aiProviderSelect.value as any,
+        apiKey: aiKeyInput.value.trim(),
+        model: aiModelInput.value.trim(),
+        customEndpoint: aiEndpointInput.value.trim(),
       },
       general: {
         auto_blast_radius: autoBlastCheckbox.checked,

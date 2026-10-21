@@ -4,8 +4,10 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { AnchorBaseElement } from '../base/anchor-element';
 import { renderSanitizedMarkdown } from '../../services/markdown.service';
 import { globalStorageService } from '../../services/storage.service';
-import { LineNote, $activeNotes } from '../../stores/notes.store';
+import { LineNote, NoteTag, $activeNotes } from '../../stores/notes.store';
 import { extractFilePath } from '../../services/file-path-resolver';
+import { AIService, AIAction } from '../../services/ai/ai.service';
+import { $settings, loadSettings } from '../../stores/settings.store';
 
 @customElement('anchor-scratchpad')
 export class AnchorScratchpad extends AnchorBaseElement {
@@ -23,6 +25,10 @@ export class AnchorScratchpad extends AnchorBaseElement {
   @state() private saveStatus: 'idle' | 'saving' | 'saved' = 'idle';
   @state() private isPromoting = false;
   @state() private isPromoted = false;
+  @state() private tag: NoteTag | undefined;
+  @state() private showAiMenu = false;
+  @state() private isAiThinking = false;
+  @state() private aiStatusMessage = '';
   private savedTimeout?: ReturnType<typeof setTimeout>;
 
   static override styles = [
@@ -37,7 +43,7 @@ export class AnchorScratchpad extends AnchorBaseElement {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         color: #0f172a;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-        overflow: hidden;
+        overflow: visible;
       }
       .header {
         display: flex;
@@ -46,8 +52,11 @@ export class AnchorScratchpad extends AnchorBaseElement {
         padding: 6px 12px;
         background-color: #f8fafc;
         border-bottom: 1px solid #e2e8f0;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
         font-size: 12px;
         gap: 8px;
+        flex-wrap: wrap;
       }
       .title-group {
         display: flex;
@@ -157,6 +166,85 @@ export class AnchorScratchpad extends AnchorBaseElement {
         border-color: #bbf7d0;
         cursor: default;
       }
+      .action-btn.suggestion {
+        color: #4338ca;
+        background-color: #eef2ff;
+        border-color: #c7d2fe;
+      }
+      .action-btn.suggestion:hover {
+        background-color: #e0e7ff;
+      }
+      .action-btn.ai {
+        color: #6d28d9;
+        background-color: #f5f3ff;
+        border-color: #ddd6fe;
+        font-weight: 600;
+      }
+      .action-btn.ai:hover {
+        background-color: #ede9fe;
+      }
+      .tag-select {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid #cbd5e1;
+        background-color: #ffffff;
+        color: #475569;
+        cursor: pointer;
+        outline: none;
+        transition: all 0.15s ease;
+      }
+      .tag-select.blocker { background-color: #fef2f2; border-color: #fecaca; color: #b91c1c; font-weight: 600; }
+      .tag-select.bug { background-color: #fffbeb; border-color: #fde68a; color: #b45309; font-weight: 600; }
+      .tag-select.suggestion { background-color: #f0f9ff; border-color: #bae6fd; color: #0369a1; font-weight: 600; }
+      .tag-select.question { background-color: #faf5ff; border-color: #e9d5ff; color: #7e22ce; font-weight: 600; }
+      .tag-select.nitpick { background-color: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+      .tag-select.praise { background-color: #f0fdf4; border-color: #bbf7d0; color: #15803d; font-weight: 600; }
+      .ai-menu-wrapper {
+        position: relative;
+        display: inline-block;
+      }
+      .ai-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 4px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        z-index: 50;
+        min-width: 175px;
+        padding: 4px;
+      }
+      .ai-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 6px 8px;
+        font-size: 11px;
+        text-align: left;
+        background: none;
+        border: none;
+        border-radius: 4px;
+        color: #334155;
+        cursor: pointer;
+      }
+      .ai-dropdown-item:hover {
+        background-color: #f5f3ff;
+        color: #5b21b6;
+      }
+      .ai-banner {
+        padding: 6px 12px;
+        background-color: #f5f3ff;
+        border-bottom: 1px solid #ddd6fe;
+        font-size: 11px;
+        color: #6d28d9;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
       .action-btn.delete {
         color: #94a3b8;
       }
@@ -255,10 +343,15 @@ export class AnchorScratchpad extends AnchorBaseElement {
         this.content = stored.content;
         this.isCollapsed = stored.isCollapsed;
         this.isPromoted = Boolean(stored.promoted);
+        this.tag = stored.tag;
       }
     }
 
     if (typeof window !== 'undefined') {
+      window.addEventListener('click', () => {
+        if (this.showAiMenu) this.showAiMenu = false;
+      });
+
       window.addEventListener('anchor-note-promoted', (e: Event) => {
         const detail = (e as CustomEvent).detail;
         if (detail?.noteId === this.noteId) {
@@ -276,11 +369,7 @@ export class AnchorScratchpad extends AnchorBaseElement {
     }
   }
 
-  private handleInput(e: Event) {
-    const target = e.target as HTMLTextAreaElement;
-    this.content = target.value;
-    this.saveStatus = 'saving';
-
+  private persistNote(immediate = false) {
     const notePayload: LineNote = {
       id: this.noteId,
       platform: this.platform,
@@ -291,17 +380,123 @@ export class AnchorScratchpad extends AnchorBaseElement {
       content: this.content,
       isCollapsed: this.isCollapsed,
       promoted: this.isPromoted,
+      tag: this.tag,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
-    globalStorageService.saveNoteDebounced(notePayload, 300).then(() => {
-      this.saveStatus = 'saved';
-      if (this.savedTimeout) clearTimeout(this.savedTimeout);
-      this.savedTimeout = setTimeout(() => {
-        this.saveStatus = 'idle';
-      }, 1500);
-    });
+    if (immediate) {
+      globalStorageService.saveNoteImmediate(notePayload);
+    } else {
+      globalStorageService.saveNoteDebounced(notePayload, 300).then(() => {
+        this.saveStatus = 'saved';
+        if (this.savedTimeout) clearTimeout(this.savedTimeout);
+        this.savedTimeout = setTimeout(() => {
+          this.saveStatus = 'idle';
+        }, 1500);
+      });
+    }
+  }
+
+  private handleInput(e: Event) {
+    const target = e.target as HTMLTextAreaElement;
+    this.content = target.value;
+    this.saveStatus = 'saving';
+    this.persistNote(false);
+  }
+
+  private handleTagChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    this.tag = (target.value as NoteTag) || undefined;
+    this.persistNote(true);
+  }
+
+  public insertSuggestion(overrideCode?: string) {
+    let code = overrideCode || '';
+    if (!code) {
+      const scratchpadRow = this.closest('tr.anchor-scratchpad-row');
+      const targetRow = scratchpadRow?.previousElementSibling as HTMLElement | null;
+      const codeCell = targetRow?.querySelector('.line_content, .line-content, .blob-code-inner, .blob-code, span.line, td.code, .diff-line, pre');
+      code = codeCell?.textContent || '';
+      code = code.replace(/^[+\-\s]/, '');
+    }
+    if (!code.endsWith('\n')) code += '\n';
+
+    const suggestionTemplate = `\`\`\`suggestion\n${code}\`\`\`\n`;
+    this.content = this.content ? `${this.content.trim()}\n\n${suggestionTemplate}` : suggestionTemplate;
+    this.tag = 'suggestion';
+    this.activeTab = 'split';
+    this.persistNote(true);
+  }
+
+  public appendQuote(quoteText: string) {
+    const formatted = `> ${quoteText.split('\n').join('\n> ')}\n\n`;
+    this.content = this.content ? `${this.content.trim()}\n\n${formatted}` : formatted;
+    this.persistNote(true);
+  }
+
+  private toggleAiMenu(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.showAiMenu = !this.showAiMenu;
+  }
+
+  public async executeAiAction(action: AIAction, overrideSnippet?: string) {
+    this.showAiMenu = false;
+    await loadSettings();
+    const settings = $settings.get();
+
+    if (!settings.ai.enabled && !settings.ai.apiKey && settings.ai.provider !== 'custom') {
+      alert('AI Copilot is not configured yet.\n\nPlease open the Context Anchor extension popup from your browser toolbar to set your API key (Gemini, OpenAI, Anthropic, or Ollama).');
+      return;
+    }
+
+    let codeSnippet = overrideSnippet?.trim() || '';
+    if (!codeSnippet) {
+      const scratchpadRow = this.closest('tr.anchor-scratchpad-row');
+      const targetRow = scratchpadRow?.previousElementSibling as HTMLElement | null;
+      const codeCell = targetRow?.querySelector('.line_content, .line-content, .blob-code-inner, .blob-code, span.line, td.code, .diff-line, pre');
+      codeSnippet = codeCell?.textContent?.trim() || '';
+    }
+
+    this.isAiThinking = true;
+    this.aiStatusMessage = `AI analyzing (${action.replace('_', ' ')})...`;
+
+    try {
+      const res = await AIService.executeAction(settings.ai, action, {
+        filePath: this.filePath,
+        lineNumber: this.lineNumber,
+        codeSnippet,
+        userDraft: this.content,
+      });
+
+      if (res.success && res.text) {
+        if (action === 'polish_note') {
+          this.content = res.text;
+        } else {
+          this.content = this.content ? `${this.content.trim()}\n\n${res.text}` : res.text;
+        }
+
+        if (action === 'spot_bugs') {
+          this.tag = 'bug';
+        } else if (action === 'suggest_fix' || action === 'unit_test') {
+          this.tag = 'suggestion';
+        } else if (action === 'explain') {
+          this.tag = 'question';
+        }
+
+        this.activeTab = 'split';
+        this.persistNote(true);
+      } else {
+        alert(res.error || 'AI generation failed');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'AI request failed';
+      alert(msg);
+    } finally {
+      this.isAiThinking = false;
+      this.aiStatusMessage = '';
+    }
   }
 
   private setTab(tab: 'write' | 'preview' | 'split', e: MouseEvent) {
@@ -312,14 +507,7 @@ export class AnchorScratchpad extends AnchorBaseElement {
 
   private toggleCollapse() {
     this.isCollapsed = !this.isCollapsed;
-    const note = $activeNotes.get()[this.noteId];
-    if (note) {
-      globalStorageService.saveNoteImmediate({
-        ...note,
-        isCollapsed: this.isCollapsed,
-        updatedAt: Date.now(),
-      });
-    }
+    this.persistNote(true);
   }
 
   private handleDelete(e: MouseEvent) {
@@ -392,6 +580,17 @@ export class AnchorScratchpad extends AnchorBaseElement {
           <span class="file-name" title="${this.filePath}">
             ${this.filePath.split('/').pop()}
           </span>
+
+          <select class="tag-select ${this.tag || ''}" @change=${this.handleTagChange} title="Classify note category">
+            <option value="" ?selected=${!this.tag}>No Tag</option>
+            <option value="blocker" ?selected=${this.tag === 'blocker'}>🚨 Blocker</option>
+            <option value="bug" ?selected=${this.tag === 'bug'}>🐛 Bug</option>
+            <option value="suggestion" ?selected=${this.tag === 'suggestion'}>💡 Suggestion</option>
+            <option value="question" ?selected=${this.tag === 'question'}>❓ Question</option>
+            <option value="nitpick" ?selected=${this.tag === 'nitpick'}>📝 Nitpick</option>
+            <option value="praise" ?selected=${this.tag === 'praise'}>👏 Praise</option>
+          </select>
+
           <div class="save-status ${this.saveStatus}">
             ${this.saveStatus === 'saving'
               ? html`<span>Saving...</span>`
@@ -402,6 +601,48 @@ export class AnchorScratchpad extends AnchorBaseElement {
         </div>
 
         <div class="controls">
+          <button
+            type="button"
+            class="action-btn suggestion"
+            @click=${this.insertSuggestion}
+            title="Insert 1-click code suggestion markdown template"
+          >
+            + Suggestion
+          </button>
+
+          <div class="ai-menu-wrapper">
+            <button
+              type="button"
+              class="action-btn ai"
+              ?disabled=${this.isAiThinking}
+              @click=${this.toggleAiMenu}
+              title="Invoke AI Copilot"
+            >
+              ${this.isAiThinking ? 'Thinking...' : '✨ Ask AI ▾'}
+            </button>
+            ${this.showAiMenu
+              ? html`
+                  <div class="ai-dropdown" @click=${(e: MouseEvent) => e.stopPropagation()}>
+                    <button type="button" class="ai-dropdown-item" @click=${() => this.executeAiAction('spot_bugs')}>
+                      🐛 Spot Bugs & Issues
+                    </button>
+                    <button type="button" class="ai-dropdown-item" @click=${() => this.executeAiAction('suggest_fix')}>
+                      ✨ Suggest Fix (Code)
+                    </button>
+                    <button type="button" class="ai-dropdown-item" @click=${() => this.executeAiAction('explain')}>
+                      🔍 Explain This Code
+                    </button>
+                    <button type="button" class="ai-dropdown-item" @click=${() => this.executeAiAction('unit_test')}>
+                      🧪 Generate Unit Test
+                    </button>
+                    <button type="button" class="ai-dropdown-item" @click=${() => this.executeAiAction('polish_note')}>
+                      🪄 Polish Note Tone
+                    </button>
+                  </div>
+                `
+              : html``}
+          </div>
+
           <div class="tab-group">
             <button
               type="button"
@@ -450,6 +691,15 @@ export class AnchorScratchpad extends AnchorBaseElement {
           </button>
         </div>
       </div>
+
+      ${this.isAiThinking
+        ? html`
+            <div class="ai-banner">
+              <span>✨ ${this.aiStatusMessage || 'AI Copilot analyzing...'}</span>
+              <span style="font-size: 10px; opacity: 0.8;">Working...</span>
+            </div>
+          `
+        : html``}
 
       <div class="body-container">
         <div class="editor-grid ${this.activeTab !== 'split' ? 'single' : ''}">

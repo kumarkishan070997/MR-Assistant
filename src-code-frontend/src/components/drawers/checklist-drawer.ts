@@ -3,7 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { AnchorBaseElement } from '../base/anchor-element';
 import { StoreController } from '../base/store-controller';
-import { $activeNotes, LineNote, buildNoteKey } from '../../stores/notes.store';
+import { $activeNotes, LineNote, NoteTag, buildNoteKey } from '../../stores/notes.store';
 import { globalStorageService } from '../../services/storage.service';
 import { renderSanitizedMarkdown } from '../../services/markdown.service';
 import { IPlatformAdapter, ReviewContext, DiffLineContext } from '../../adapters/base.adapter';
@@ -19,6 +19,7 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
 
   @state() private copyToastMessage = '';
   @state() private promotingNoteId: string | null = null;
+  @state() private activeTagFilter: 'all' | NoteTag = 'all';
 
   private notesStore = new StoreController(this, $activeNotes);
   private healingNotes = new Set<string>();
@@ -293,6 +294,48 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
         margin: 0 auto 10px;
         color: #94a3b8;
       }
+      .filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        overflow-x: auto;
+      }
+      .chip {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        border: 1px solid #cbd5e1;
+        background-color: #ffffff;
+        color: #475569;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+      }
+      .chip:hover {
+        background-color: #f1f5f9;
+        color: #0f172a;
+      }
+      .chip.active {
+        background-color: #0f172a;
+        color: #ffffff;
+        border-color: #0f172a;
+        font-weight: 600;
+      }
+      .tag-badge {
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+      }
+      .tag-badge.blocker { background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+      .tag-badge.bug { background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+      .tag-badge.suggestion { background-color: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
+      .tag-badge.question { background-color: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+      .tag-badge.nitpick { background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+      .tag-badge.praise { background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
     `
   ];
 
@@ -552,8 +595,12 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
 
   override render() {
     const notesMap = this.notesStore.value || {};
-    const notesList = Object.values(notesMap);
-    const grouped = this.groupNotesByFile(notesList);
+    const allNotes = Object.values(notesMap);
+    const filteredNotes =
+      this.activeTagFilter === 'all'
+        ? allNotes
+        : allNotes.filter((n) => n.tag === this.activeTagFilter);
+    const grouped = this.groupNotesByFile(filteredNotes);
     const fileCount = Object.keys(grouped).length;
 
     return html`
@@ -562,13 +609,13 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
         <div class="header">
           <div class="title">
             <span>Review Checklist</span>
-            <span class="count-badge">${notesList.length}</span>
+            <span class="count-badge">${allNotes.length}</span>
           </div>
 
           <div class="header-actions">
-            ${notesList.length > 0
+            ${allNotes.length > 0
               ? html`
-                  <button type="button" class="btn-header" @click=${() => this.exportAllMarkdown(notesList)} title="Copy review summary as Markdown">
+                  <button type="button" class="btn-header" @click=${() => this.exportAllMarkdown(allNotes)} title="Copy review summary as Markdown">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path>
                       <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path>
@@ -586,25 +633,56 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
           </div>
         </div>
 
-        ${notesList.length > 0
+        ${allNotes.length > 0
           ? html`
               <div class="summary-bar">
-                <span>${notesList.length} ${notesList.length === 1 ? 'note' : 'notes'} across ${fileCount} ${fileCount === 1 ? 'file' : 'files'}</span>
+                <span>${allNotes.length} ${allNotes.length === 1 ? 'note' : 'notes'} across ${fileCount} ${fileCount === 1 ? 'file' : 'files'}</span>
                 <span>Private & local</span>
+              </div>
+
+              <div class="filter-bar">
+                <button
+                  type="button"
+                  class="chip ${this.activeTagFilter === 'all' ? 'active' : ''}"
+                  @click=${() => (this.activeTagFilter = 'all')}
+                >
+                  All (${allNotes.length})
+                </button>
+                ${(['blocker', 'bug', 'suggestion', 'question', 'nitpick', 'praise'] as NoteTag[]).map((t) => {
+                  const count = allNotes.filter((n) => n.tag === t).length;
+                  if (count === 0 && this.activeTagFilter !== t) return html``;
+                  const labels: Record<NoteTag, string> = {
+                    blocker: '🚨 Blocker',
+                    bug: '🐛 Bug',
+                    suggestion: '💡 Suggestion',
+                    question: '❓ Question',
+                    nitpick: '📝 Nitpick',
+                    praise: '👏 Praise',
+                  };
+                  return html`
+                    <button
+                      type="button"
+                      class="chip ${this.activeTagFilter === t ? 'active' : ''}"
+                      @click=${() => (this.activeTagFilter = t)}
+                    >
+                      ${labels[t]} (${count})
+                    </button>
+                  `;
+                })}
               </div>
             `
           : html``}
 
         <div class="content">
-          ${notesList.length === 0
+          ${filteredNotes.length === 0
             ? html`
                 <div class="empty-state">
                   <svg class="empty-icon" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.13 3.13c.015.44-.087 1.05-.543 1.506a.5.5 0 0 1-.707 0L5.353 8.283 1.939 11.7a.5.5 0 0 1-.707 0l-.708-.707a.5.5 0 0 1 0-.708L3.938 6.87 1.408 4.34a.5.5 0 0 1 0-.707c.456-.456 1.066-.558 1.506-.543l3.13-3.13C6.023.085 6.005.027 6.005 0c0-.43.108-1.024.588-1.504a.5.5 0 0 1 .707 0l2.528 2.226z"/>
                   </svg>
-                  <div class="font-semibold text-sm text-slate-700">No private notes yet</div>
+                  <div class="font-semibold text-sm text-slate-700">No notes match this filter</div>
                   <div class="text-xs text-slate-500 mt-1 max-w-[240px] mx-auto">
-                    Hover over any diff line number and click the 📌 pin icon to draft private inline review notes.
+                    Try switching filters or click "All" to view all drafted notes.
                   </div>
                 </div>
               `
@@ -622,12 +700,18 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
                       (note) => html`
                         <div class="note-card">
                           <div class="note-top">
-                            <span class="line-pill" @click=${() => this.scrollToLine(note.filePath, note.lineNumber)}>
-                              L${note.lineNumber}
-                              <svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M8 2a.75.75 0 0 1 .75.75v8.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V2.75A.75.75 0 0 1 8 2Z"></path>
-                              </svg>
-                            </span>
+                            <div style="display: inline-flex; align-items: center; gap: 6px;">
+                              <span class="line-pill" @click=${() => this.scrollToLine(note.filePath, note.lineNumber)}>
+                                L${note.lineNumber}
+                                <svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor">
+                                  <path d="M8 2a.75.75 0 0 1 .75.75v8.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V2.75A.75.75 0 0 1 8 2Z"></path>
+                                </svg>
+                              </span>
+
+                              ${note.tag
+                                ? html`<span class="tag-badge ${note.tag}">${note.tag.toUpperCase()}</span>`
+                                : html``}
+                            </div>
 
                             ${note.promoted
                               ? html`<span class="promoted-badge">✓ Commented</span>`

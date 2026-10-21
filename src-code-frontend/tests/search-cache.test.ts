@@ -11,7 +11,7 @@ describe('SearchCacheService', () => {
 
   const mockResult: SymbolReferenceResult = {
     symbol: 'getUserProfile',
-    totalCount: 2,
+    totalMatches: 2,
     rateLimited: false,
     matches: [
       {
@@ -46,7 +46,7 @@ describe('SearchCacheService', () => {
 
     const cached = cache.get(key);
     expect(cached).not.toBeNull();
-    expect(cached?.totalCount).toBe(2);
+    expect(cached?.totalMatches).toBe(2);
     expect(cached?.matches[0].filePath).toBe('src/services/user.service.ts');
   });
 

@@ -14,6 +14,9 @@ import { globalStorageService } from '../../services/storage.service';
 import { $settings, loadSettings } from '../../stores/settings.store';
 import { $activeNotes } from '../../stores/notes.store';
 import { extractFilePath } from '../../services/file-path-resolver';
+import { DiffTableInjector } from '../../services/diff-table-injector';
+import { AnchorScratchpad } from '../diff/scratchpad-row';
+import { AIAction } from '../../services/ai/ai.service';
 
 @customElement('anchor-overlay-root')
 export class AnchorOverlayRoot extends AnchorBaseElement {
@@ -43,14 +46,32 @@ export class AnchorOverlayRoot extends AnchorBaseElement {
     }
   }
 
-  public showTrigger(symbol: string, x: number, y: number) {
+  public showTrigger(
+    param: string | { symbol?: string; selectedText?: string; x: number; y: number; lineNumber?: number; filePath?: string; targetRow?: HTMLTableRowElement | null },
+    legacyX?: number,
+    legacyY?: number
+  ) {
     const trigger = this.triggerEl || (this.shadowRoot?.querySelector('anchor-symbol-trigger') as AnchorSymbolTrigger | null);
     if (!trigger) {
       return;
     }
-    trigger.symbol = symbol;
-    trigger.x = x;
-    trigger.y = y;
+    if (typeof param === 'string') {
+      trigger.symbol = param;
+      trigger.selectedText = '';
+      trigger.x = legacyX || 0;
+      trigger.y = legacyY || 0;
+      trigger.lineNumber = 0;
+      trigger.filePath = '';
+      trigger.targetRow = null;
+    } else {
+      trigger.symbol = param.symbol || '';
+      trigger.selectedText = param.selectedText || '';
+      trigger.x = param.x;
+      trigger.y = param.y;
+      trigger.lineNumber = param.lineNumber || 0;
+      trigger.filePath = param.filePath || '';
+      trigger.targetRow = param.targetRow || null;
+    }
     trigger.visible = true;
     if (typeof trigger.requestUpdate === 'function') {
       trigger.requestUpdate();
@@ -202,6 +223,100 @@ export class AnchorOverlayRoot extends AnchorBaseElement {
 
     window.addEventListener('anchor-promote-note', handlePromoteEvent as EventListener);
     this.addEventListener('anchor-promote-note', handlePromoteEvent as EventListener);
+
+    this.addEventListener('anchor-trigger-suggestion', ((e: CustomEvent) => {
+      const { selectedText, lineNumber, filePath, targetRow: providedRow } = e.detail;
+      const row = providedRow || this.findRowForLine(filePath, lineNumber);
+      if (!row || !this.context) return;
+      this.hideTrigger();
+
+      const scratchpadRow = DiffTableInjector.injectScratchpadRow(
+        row,
+        this.context,
+        filePath,
+        lineNumber
+      );
+      scratchpadRow.style.display = 'table-row';
+      const scratchpad = scratchpadRow.querySelector('anchor-scratchpad') as AnchorScratchpad | null;
+      if (scratchpad) {
+        scratchpad.insertSuggestion(selectedText);
+      }
+    }) as EventListener);
+
+    this.addEventListener('anchor-trigger-note', ((e: CustomEvent) => {
+      const { selectedText, lineNumber, filePath, targetRow: providedRow } = e.detail;
+      const row = providedRow || this.findRowForLine(filePath, lineNumber);
+      if (!row || !this.context) return;
+      this.hideTrigger();
+
+      const scratchpadRow = DiffTableInjector.injectScratchpadRow(
+        row,
+        this.context,
+        filePath,
+        lineNumber
+      );
+      scratchpadRow.style.display = 'table-row';
+      const scratchpad = scratchpadRow.querySelector('anchor-scratchpad') as AnchorScratchpad | null;
+      if (scratchpad && selectedText) {
+        scratchpad.appendQuote(selectedText);
+      }
+    }) as EventListener);
+
+    this.addEventListener('anchor-trigger-ai', (async (e: CustomEvent) => {
+      const { action, selectedText, lineNumber, filePath, targetRow: providedRow } = e.detail;
+      const row = providedRow || this.findRowForLine(filePath, lineNumber);
+      if (!row || !this.context) return;
+      this.hideTrigger();
+
+      const scratchpadRow = DiffTableInjector.injectScratchpadRow(
+        row,
+        this.context,
+        filePath,
+        lineNumber
+      );
+      scratchpadRow.style.display = 'table-row';
+      const scratchpad = scratchpadRow.querySelector('anchor-scratchpad') as AnchorScratchpad | null;
+      if (scratchpad) {
+        await scratchpad.executeAiAction(action, selectedText);
+      }
+    }) as unknown as EventListener);
+  }
+
+  public findRowForLine(filePath: string, lineNumber: number): HTMLTableRowElement | null {
+    if (!lineNumber) return null;
+    const isGitHub = this.context?.platform === 'github';
+
+    if (filePath && filePath !== 'unknown_file') {
+      const fileContainers = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          isGitHub
+            ? '.file, [data-file-type]'
+            : 'diff-file, .diff-file, [data-blob-path], .file-holder'
+        )
+      );
+
+      for (const container of fileContainers) {
+        const detected = extractFilePath(container);
+        if (detected === filePath || container.getAttribute('data-blob-path') === filePath) {
+          const cell = container.querySelector(
+            isGitHub
+              ? `td.blob-num[data-line-number="${lineNumber}"]`
+              : `[data-linenumber="${lineNumber}"], [data-line-number="${lineNumber}"]`
+          );
+          if (cell) {
+            return (cell.closest('tr, .line_holder, .diff-tr') || cell.parentElement?.closest('tr')) as HTMLTableRowElement | null;
+          }
+        }
+      }
+    }
+
+    if (isGitHub) {
+      const cell = document.querySelector(`td.blob-num[data-line-number="${lineNumber}"]`);
+      return cell?.closest('tr') as HTMLTableRowElement | null;
+    } else {
+      const cell = document.querySelector(`[data-linenumber="${lineNumber}"], [data-line-number="${lineNumber}"]`);
+      return (cell?.closest('tr, .line_holder, .diff-tr') || cell?.parentElement?.closest('tr')) as HTMLTableRowElement | null;
+    }
   }
 
   override render() {
