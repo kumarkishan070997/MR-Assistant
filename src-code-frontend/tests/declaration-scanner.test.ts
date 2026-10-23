@@ -108,6 +108,51 @@ describe('DeclarationScanner', () => {
     });
   });
 
+  describe('Polyglot (Java, C#, Rust, Ruby, Kotlin, Swift, C++) Detection', () => {
+    it('detects Java & C# methods and classes', () => {
+      expect(detectDeclaration('+ public OrderResponse processPayment(OrderRequest req) {', 'PaymentService.java'))
+        .toEqual({ symbol: 'processPayment', kind: 'function', language: 'java', enclosingClass: 'PaymentService' });
+
+      expect(detectDeclaration('+ public async Task<IActionResult> GetUserAsync(int id)', 'UserController.cs'))
+        .toEqual({ symbol: 'GetUserAsync', kind: 'function', language: 'csharp', enclosingClass: 'UserController' });
+
+      expect(detectDeclaration('+ public record CustomerAccount(string Id, string Name);', 'CustomerAccount.cs'))
+        .toEqual({ symbol: 'CustomerAccount', kind: 'class', language: 'csharp', enclosingClass: 'CustomerAccount' });
+    });
+
+    it('detects Rust functions and structs', () => {
+      expect(detectDeclaration('+ pub async fn execute_query(conn: &mut Connection) -> Result<()> {', 'db.rs'))
+        .toEqual({ symbol: 'execute_query', kind: 'function', language: 'rust', enclosingClass: undefined });
+
+      expect(detectDeclaration('+ pub struct ConnectionPool {', 'pool.rs'))
+        .toEqual({ symbol: 'ConnectionPool', kind: 'struct', language: 'rust', enclosingClass: 'ConnectionPool' });
+    });
+
+    it('detects Ruby methods and classes', () => {
+      expect(detectDeclaration('+ def calculate_tax(amount, state)', 'tax_calculator.rb'))
+        .toEqual({ symbol: 'calculate_tax', kind: 'function', language: 'ruby', enclosingClass: undefined });
+
+      expect(detectDeclaration('+ class OrderProcessor', 'order_processor.rb'))
+        .toEqual({ symbol: 'OrderProcessor', kind: 'class', language: 'ruby', enclosingClass: 'OrderProcessor' });
+    });
+
+    it('detects Kotlin and Swift functions', () => {
+      expect(detectDeclaration('+ suspend fun fetchUserProfile(userId: String): User {', 'UserService.kt'))
+        .toEqual({ symbol: 'fetchUserProfile', kind: 'function', language: 'kotlin', enclosingClass: 'UserService' });
+
+      expect(detectDeclaration('+ func authenticateWithBiometrics() async throws -> Bool {', 'AuthManager.swift'))
+        .toEqual({ symbol: 'authenticateWithBiometrics', kind: 'function', language: 'swift', enclosingClass: 'AuthManager' });
+    });
+
+    it('detects C++ methods and classes', () => {
+      expect(detectDeclaration('+ class NetworkSocket : public BaseSocket {', 'socket.hpp'))
+        .toEqual({ symbol: 'NetworkSocket', kind: 'class', language: 'cpp', enclosingClass: 'NetworkSocket' });
+
+      expect(detectDeclaration('+ void SocketManager::initializeConnection() {', 'socket.cpp'))
+        .toEqual({ symbol: 'initializeConnection', kind: 'function', language: 'cpp', enclosingClass: 'SocketManager' });
+    });
+  });
+
   describe('Comment & False Positive Filters', () => {
     it('ignores lines that are commented out', () => {
       expect(detectDeclaration('+ // function oldFunction() {', 'app.ts')).toBeNull();

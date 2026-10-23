@@ -44,6 +44,19 @@ export class AnchorScratchpad extends AnchorBaseElement {
         color: #0f172a;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         overflow: visible;
+        transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.18s cubic-bezier(0.4, 0, 0.2, 1), margin 0.18s ease;
+      }
+      :host(.deleting) {
+        transform: translate3d(0, 14px, 0) scale(0.92) rotate(-1.5deg);
+        opacity: 0;
+        filter: blur(1.5px);
+        max-height: 0 !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        border-color: transparent !important;
+        overflow: hidden !important;
       }
       .header {
         display: flex;
@@ -183,6 +196,10 @@ export class AnchorScratchpad extends AnchorBaseElement {
       .action-btn.ai:hover {
         background-color: #ede9fe;
       }
+      .tag-select-wrapper {
+        display: inline-flex;
+        align-items: center;
+      }
       .tag-select {
         font-size: 11px;
         padding: 2px 6px;
@@ -255,6 +272,55 @@ export class AnchorScratchpad extends AnchorBaseElement {
       }
       .body-container {
         padding: 8px 12px 10px;
+      }
+      .chips-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }
+      .chips-row::-webkit-scrollbar {
+        display: none;
+      }
+      .quick-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 12px;
+        background-color: #f1f5f9;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+        user-select: none;
+      }
+      .quick-chip:hover {
+        background-color: #e2e8f0;
+        color: #0f172a;
+        transform: translateY(-1px);
+        border-color: #cbd5e1;
+      }
+      .quick-chip.danger:hover {
+        background-color: #fee2e2;
+        color: #b91c1c;
+        border-color: #fca5a5;
+      }
+      .quick-chip.warning:hover {
+        background-color: #fef3c7;
+        color: #b45309;
+        border-color: #fcd34d;
+      }
+      .quick-chip.info:hover {
+        background-color: #e0f2fe;
+        color: #0369a1;
+        border-color: #7dd3fc;
       }
       .editor-grid {
         display: grid;
@@ -560,17 +626,56 @@ export class AnchorScratchpad extends AnchorBaseElement {
     this.persistNote(true);
   }
 
+  public insertFeedbackChip(label: string, tag?: NoteTag) {
+    const chipText = `**[${label}]**: `;
+    if (!this.content || !this.content.trim()) {
+      this.content = chipText;
+    } else {
+      this.content = `${this.content.trim()}\n\n${chipText}`;
+    }
+    if (tag) {
+      this.tag = tag;
+    }
+    this.persistNote(true);
+    this.updateComplete.then(() => {
+      const textarea = this.renderRoot?.querySelector('textarea');
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(this.content.length, this.content.length);
+      }
+    });
+  }
+
   private handleDelete(e: MouseEvent) {
     e.stopPropagation();
     if (confirm('Delete this private note?')) {
-      globalStorageService.deleteNote(this.noteId);
-      this.dispatchEvent(
-        new CustomEvent('anchor-delete-note', {
-          bubbles: true,
-          composed: true,
-          detail: { noteId: this.noteId },
-        })
-      );
+      this.classList.add('deleting');
+      setTimeout(() => {
+        globalStorageService.deleteNote(this.noteId);
+        this.dispatchEvent(
+          new CustomEvent('anchor-delete-note', {
+            bubbles: true,
+            composed: true,
+            detail: { noteId: this.noteId },
+          })
+        );
+        const scratchpadRow = this.closest('tr.anchor-scratchpad-row');
+        if (scratchpadRow) {
+          const targetRow = scratchpadRow.previousElementSibling as HTMLTableRowElement | null;
+          if (targetRow) {
+            const pin = targetRow.querySelector('.anchor-pin-btn') as HTMLElement | null;
+            if (pin) {
+              pin.classList.remove('has-note');
+              pin.style.color = '#656d76';
+              pin.style.opacity = '0.75';
+              pin.title = 'Add private line note';
+            }
+          }
+          scratchpadRow.remove();
+        } else {
+          this.remove();
+        }
+      }, 180);
     }
   }
 
@@ -631,15 +736,17 @@ export class AnchorScratchpad extends AnchorBaseElement {
             ${this.filePath.split('/').pop()}
           </span>
 
-          <select class="tag-select ${this.tag || ''}" @change=${this.handleTagChange} title="Classify note category">
-            <option value="" ?selected=${!this.tag}>No Tag</option>
-            <option value="blocker" ?selected=${this.tag === 'blocker'}>🚨 Blocker</option>
-            <option value="bug" ?selected=${this.tag === 'bug'}>🐛 Bug</option>
-            <option value="suggestion" ?selected=${this.tag === 'suggestion'}>💡 Suggestion</option>
-            <option value="question" ?selected=${this.tag === 'question'}>❓ Question</option>
-            <option value="nitpick" ?selected=${this.tag === 'nitpick'}>📝 Nitpick</option>
-            <option value="praise" ?selected=${this.tag === 'praise'}>👏 Praise</option>
-          </select>
+          <span class="tag-select-wrapper">
+            <select class="tag-select ${this.tag || ''}" @change=${this.handleTagChange} title="Classify note category">
+              <option value="" ?selected=${!this.tag}>No Tag</option>
+              <option value="blocker" ?selected=${this.tag === 'blocker'}>🚨 Blocker</option>
+              <option value="bug" ?selected=${this.tag === 'bug'}>🐛 Bug</option>
+              <option value="suggestion" ?selected=${this.tag === 'suggestion'}>💡 Suggestion</option>
+              <option value="question" ?selected=${this.tag === 'question'}>❓ Question</option>
+              <option value="nitpick" ?selected=${this.tag === 'nitpick'}>📝 Nitpick</option>
+              <option value="praise" ?selected=${this.tag === 'praise'}>👏 Praise</option>
+            </select>
+          </span>
 
           <div class="save-status ${this.saveStatus}">
             ${this.saveStatus === 'saving'
@@ -752,6 +859,32 @@ export class AnchorScratchpad extends AnchorBaseElement {
         : html``}
 
       <div class="body-container">
+        ${this.activeTab === 'write' || this.activeTab === 'split'
+          ? html`
+              <div class="chips-row">
+                <span style="font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Quick:</span>
+                <button type="button" class="quick-chip danger" @click=${() => this.insertFeedbackChip('⚠️ Missing Test Case', 'bug')}>
+                  ⚠️ Missing Test
+                </button>
+                <button type="button" class="quick-chip warning" @click=${() => this.insertFeedbackChip('⚡ Potential N+1 Query', 'bug')}>
+                  ⚡ Potential N+1
+                </button>
+                <button type="button" class="quick-chip danger" @click=${() => this.insertFeedbackChip('🔒 Validate Input / Sanitize', 'blocker')}>
+                  🔒 Validate Input
+                </button>
+                <button type="button" class="quick-chip warning" @click=${() => this.insertFeedbackChip('🔄 Missing DB Transaction', 'bug')}>
+                  🔄 Missing Transaction
+                </button>
+                <button type="button" class="quick-chip info" @click=${() => this.insertFeedbackChip('💡 Extract Helper / Service', 'suggestion')}>
+                  💡 Extract Helper
+                </button>
+                <button type="button" class="quick-chip info" @click=${() => this.insertFeedbackChip('⏱️ Consider Idempotency', 'suggestion')}>
+                  ⏱️ Idempotency
+                </button>
+              </div>
+            `
+          : html``}
+
         <div class="editor-grid ${this.activeTab !== 'split' ? 'single' : ''}">
           ${this.activeTab === 'write' || this.activeTab === 'split'
             ? html`
