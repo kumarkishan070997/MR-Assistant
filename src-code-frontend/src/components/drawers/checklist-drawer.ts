@@ -12,6 +12,7 @@ import { extractFilePath } from '../../services/file-path-resolver';
 import { $settings, loadSettings, saveSettings } from '../../stores/settings.store';
 import { $reviewProgress } from '../../stores/review-progress.store';
 import { PrReviewService, PrReviewFinding, PrReviewResult } from '../../services/pr-review.service';
+import { collapseNoiseFiles } from '../../services/noise-reducer.service';
 
 @customElement('anchor-checklist-drawer')
 export class AnchorChecklistDrawer extends AnchorBaseElement {
@@ -32,6 +33,8 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
   @state() private postingFindingId: string | null = null;
   @state() private postedFindingIds = new Set<string>();
   @state() private copiedSnippetFindingId: string | null = null;
+  @state() private deletingNoteId: string | null = null;
+  @state() private copiedNoteId: string | null = null;
 
   private notesStore = new StoreController(this, $activeNotes);
   private progressStore = new StoreController(this, $reviewProgress);
@@ -583,8 +586,258 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
         text-align: center;
         color: #065f46;
       }
+
+      /* Micro-animations: 60fps compositor-only */
+      @keyframes cardPoofDelete {
+        0% {
+          opacity: 1;
+          transform: translate3d(0, 0, 0) scale(1);
+          max-height: 250px;
+        }
+        40% {
+          opacity: 0.6;
+          transform: translate3d(0, 4px, 0) scale(0.96) rotate(-1.5deg);
+        }
+        100% {
+          opacity: 0;
+          transform: translate3d(0, 16px, 0) scale(0.88) rotate(-2deg);
+          max-height: 0;
+          padding-top: 0;
+          padding-bottom: 0;
+          margin-top: 0;
+          margin-bottom: 0;
+          border-width: 0;
+        }
+      }
+      .note-card.deleting {
+        animation: cardPoofDelete 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      @keyframes copyHaloRipple {
+        0% {
+          box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.65);
+          border-color: #38bdf8;
+        }
+        70% {
+          box-shadow: 0 0 0 6px rgba(56, 189, 248, 0);
+          border-color: #38bdf8;
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+        }
+      }
+      .finding-fix-container.copied {
+        animation: copyHaloRipple 0.35s ease-out;
+        border-color: #38bdf8;
+      }
+      .btn-copy-fix.copied {
+        background: #0284c7;
+        color: #ffffff;
+      }
+      @keyframes noteCopyFlash {
+        0% { background-color: rgba(56, 189, 248, 0.15); }
+        100% { background-color: #ffffff; }
+      }
+      .note-card.copied {
+        animation: noteCopyFlash 0.3s ease-out;
+      }
+      @keyframes aiScanRadar {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+      .ai-scan-bar {
+        position: relative;
+        height: 3px;
+        width: 100%;
+        background: #ede9fe;
+        overflow: hidden;
+      }
+      .ai-scan-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(90deg, transparent, #8b5cf6, #38bdf8, transparent);
+        animation: aiScanRadar 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+      }
     `
   ];
+
+  private handleGlobalKeyDownBound = this.handleGlobalKeyDown.bind(this);
+
+  override connectedCallback() {
+    super.connectedCallback();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.handleGlobalKeyDownBound);
+    }
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.handleGlobalKeyDownBound);
+    }
+  }
+
+  private handleGlobalKeyDown(e: KeyboardEvent) {
+    const activeEl = document.activeElement;
+    if (
+      activeEl &&
+      (activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        (activeEl as HTMLElement).isContentEditable)
+    ) {
+      return;
+    }
+
+    if (e.altKey && (e.key === 'd' || e.key === 'D' || e.code === 'KeyD')) {
+      e.preventDefault();
+      this.toggle();
+      return;
+    }
+
+    if (e.altKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR')) {
+      e.preventDefault();
+      this.markCurrentFileReviewedAndAdvance();
+      return;
+    }
+
+    if (e.altKey && (e.key === 'j' || e.key === 'J' || e.code === 'KeyJ')) {
+      e.preventDefault();
+      this.jumpToNextFile(1);
+      return;
+    }
+
+    if (e.altKey && (e.key === 'k' || e.key === 'K' || e.code === 'KeyK')) {
+      e.preventDefault();
+      this.jumpToNextFile(-1);
+      return;
+    }
+  }
+
+  public markCurrentFileReviewedAndAdvance() {
+    if (typeof document === 'undefined') return;
+
+    const isGitHub = this.context?.platform === 'github';
+    const containers = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        isGitHub
+          ? '.file, div[data-file-path], div.js-file'
+          : '.diff-file, [data-blob-path], .file-holder'
+      )
+    );
+
+    if (containers.length === 0) return;
+
+    const currentContainer = containers.find((c) => {
+      const rect = c.getBoundingClientRect();
+      return rect.bottom > 80 && rect.top < window.innerHeight / 2;
+    }) || containers[0];
+
+    const reviewedCheckbox = currentContainer.querySelector<HTMLInputElement>(
+      '.js-reviewed-checkbox, input[type="checkbox"][name="reviewed"]'
+    );
+    if (reviewedCheckbox && !reviewedCheckbox.checked) {
+      reviewedCheckbox.click();
+    }
+
+    const currentIndex = containers.indexOf(currentContainer);
+    if (currentIndex < containers.length - 1) {
+      const nextContainer = containers[currentIndex + 1];
+      nextContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const nextName = extractFilePath(nextContainer);
+      this.showToast(`✓ Advanced to ${nextName.split('/').pop() || 'next file'} (Alt+R)`);
+    } else {
+      this.showToast('✓ All files reviewed!');
+    }
+  }
+
+  public jumpToNextFile(direction: 1 | -1 = 1) {
+    if (typeof document === 'undefined') return;
+    const isGitHub = this.context?.platform === 'github';
+    const containers = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        isGitHub ? '.file, div[data-file-path], div.js-file' : '.diff-file, [data-blob-path]'
+      )
+    );
+    if (containers.length === 0) return;
+
+    const currentIndex = containers.findIndex((c) => {
+      const rect = c.getBoundingClientRect();
+      return rect.bottom > 80 && rect.top < window.innerHeight / 2;
+    });
+
+    const targetIndex = Math.max(0, Math.min(containers.length - 1, (currentIndex === -1 ? 0 : currentIndex) + direction));
+    const target = containers[targetIndex];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const name = extractFilePath(target);
+      this.showToast(`Jumped to ${name.split('/').pop() || 'file'}`);
+    }
+  }
+
+  public handleCollapseNoise() {
+    const res = collapseNoiseFiles(document);
+    if (res.collapsedCount > 0) {
+      this.showToast(`🧹 Collapsed ${res.collapsedCount} noise file(s) (lockfiles, generated schemas, SVGs)`);
+    } else if (res.totalNoiseFiles > 0) {
+      this.showToast(`All ${res.totalNoiseFiles} noise file(s) are already collapsed`);
+    } else {
+      this.showToast('No noise files detected in this MR/PR diff');
+    }
+  }
+
+  public generatePrVerdict() {
+    if (!this.reviewResult) return;
+
+    const findings = this.reviewResult.findings;
+    const criticals = findings.filter((f) => f.severity === 'critical');
+    const highs = findings.filter((f) => f.severity === 'high');
+    const mediums = findings.filter((f) => f.severity === 'medium');
+
+    const hasBlockers = criticals.length > 0 || highs.length > 0;
+    const verdictTitle = hasBlockers
+      ? `🚨 PeerPilot Senior Review Verdict: Changes Requested (${criticals.length + highs.length} Blocker(s))`
+      : `✅ PeerPilot Senior Review Verdict: LGTM with Minor Notes`;
+
+    let md = `### ${verdictTitle}\n\n`;
+    md += `**Analysis**: Reviewed ${this.reviewResult.totalFilesAnalyzed} file(s) with PeerPilot Critical Diff Analyzer.\n\n`;
+
+    if (hasBlockers) {
+      md += `#### 🛑 Critical & High Priority Issues (Must Resolve Before Merge):\n\n`;
+      [...criticals, ...highs].forEach((f, idx) => {
+        const lineLoc = f.lineNumber ? `:${f.lineNumber}` : (f.lineLabel ? `:${f.lineLabel}` : '');
+        md += `${idx + 1}. **\`${f.filePath}${lineLoc}\`** — **${f.title}** (${f.severity.toUpperCase()} | \`${f.category}\`)\n`;
+        md += `   > ${f.description}\n`;
+        if (f.suggestedFix) {
+          md += `   \`\`\`\n   ${f.suggestedFix.trim().replace(/\n/g, '\n   ')}\n   \`\`\`\n`;
+        }
+        md += `\n`;
+      });
+    }
+
+    if (mediums.length > 0) {
+      md += `#### 💡 Architectural Suggestions & Optimizations:\n\n`;
+      mediums.forEach((f, idx) => {
+        const lineLoc = f.lineNumber ? `:${f.lineNumber}` : (f.lineLabel ? `:${f.lineLabel}` : '');
+        md += `${idx + 1}. **\`${f.filePath}${lineLoc}\`** — **${f.title}** (\`${f.category}\`)\n`;
+        md += `   > ${f.description}\n\n`;
+      });
+    }
+
+    if (!hasBlockers && mediums.length === 0) {
+      md += `Clean implementation. No security vulnerabilities, N+1 queries, race conditions, or memory leaks detected.\n\n`;
+    }
+
+    md += `---\n*Automated senior code review generated via [PeerPilot](https://github.com)*\n`;
+
+    navigator.clipboard.writeText(md).then(() => {
+      this.showToast('✓ Copied Executive PR Verdict to clipboard!');
+    });
+  }
 
   public open() {
     this.isOpen = true;
@@ -876,16 +1129,26 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
 
   private async handleDelete(noteId: string) {
     if (confirm('Delete this private note?')) {
-      await globalStorageService.deleteNote(noteId);
-      const row = document.querySelector(`tr.anchor-scratchpad-row[data-note-id="${noteId}"]`);
-      row?.remove();
-      this.showToast('Note deleted');
+      this.deletingNoteId = noteId;
+      setTimeout(async () => {
+        await globalStorageService.deleteNote(noteId);
+        const row = document.querySelector(`tr.anchor-scratchpad-row[data-note-id="${noteId}"]`);
+        row?.remove();
+        this.deletingNoteId = null;
+        this.showToast('Note deleted');
+      }, 180);
     }
   }
 
   private copyNoteMarkdown(note: LineNote) {
     const text = `**File:** \`${note.filePath}\` (Line ${note.lineNumber})\n\n${note.content}`;
     navigator.clipboard.writeText(text).then(() => {
+      this.copiedNoteId = note.id;
+      setTimeout(() => {
+        if (this.copiedNoteId === note.id) {
+          this.copiedNoteId = null;
+        }
+      }, 1800);
       this.showToast('Copied note to clipboard!');
     });
   }
@@ -1094,6 +1357,15 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
           </div>
 
           <div class="header-actions">
+            <button
+              type="button"
+              class="btn-header"
+              @click=${this.handleCollapseNoise}
+              title="Automatically collapse lockfiles, generated schemas, SVGs, and translation snapshots (Alt+N)"
+            >
+              🧹 Focus on Logic
+            </button>
+
             ${this.activeTab === 'notes' && allNotes.length > 0
               ? html`
                   <button type="button" class="btn-header" @click=${() => this.exportAllMarkdown(allNotes)} title="Copy review summary as Markdown">
@@ -1113,6 +1385,10 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
             </button>
           </div>
         </div>
+
+        ${this.isReviewing
+          ? html`<div class="ai-scan-bar" title="AI Review analyzing diffs..."></div>`
+          : html``}
 
         ${totalFiles > 0
           ? html`
@@ -1216,7 +1492,7 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
 
                           ${fileNotes.map(
                             (note) => html`
-                              <div class="note-card">
+                              <div class="note-card ${this.deletingNoteId === note.id ? 'deleting' : ''} ${this.copiedNoteId === note.id ? 'copied' : ''}">
                                 <div class="note-top">
                                   <div style="display: inline-flex; align-items: center; gap: 6px;">
                                     <span class="line-pill" @click=${() => this.scrollToLine(note.filePath, note.lineNumber)}>
@@ -1250,10 +1526,10 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
                                   </button>
                                   <button
                                     type="button"
-                                    class="btn-action"
+                                    class="btn-action ${this.copiedNoteId === note.id ? 'copied' : ''}"
                                     @click=${() => this.copyNoteMarkdown(note)}
                                   >
-                                    Copy
+                                    ${this.copiedNoteId === note.id ? '✓ Copied' : 'Copy'}
                                   </button>
                                   <button
                                     type="button"
@@ -1362,22 +1638,32 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
                 <!-- Review Output Results -->
                 ${this.reviewResult
                   ? html`
-                      <div style="display: flex; align-items: center; justify-content: space-between; margin: 12px 0 8px;">
+                      <div style="display: flex; align-items: center; justify-content: space-between; margin: 12px 0 8px; gap: 8px;">
                         <span style="font-size: 12px; font-weight: 700; color: #1e293b;">
                           ${this.reviewResult.summary}
                         </span>
-                        ${this.reviewResult.rawText
-                          ? html`
-                              <button
-                                type="button"
-                                class="btn-header"
-                                @click=${() => this.copyReportMarkdown(this.reviewResult!.rawText)}
-                                title="Copy full review as Markdown"
-                              >
-                                Copy Report
-                              </button>
-                            `
-                          : html``}
+                        <div style="display: inline-flex; align-items: center; gap: 6px;">
+                          <button
+                            type="button"
+                            class="btn-header"
+                            @click=${this.generatePrVerdict}
+                            title="Copy senior executive PR review verdict formatted as Markdown for top-level review comment"
+                          >
+                            📋 Copy PR Verdict
+                          </button>
+                          ${this.reviewResult.rawText
+                            ? html`
+                                <button
+                                  type="button"
+                                  class="btn-header"
+                                  @click=${() => this.copyReportMarkdown(this.reviewResult!.rawText)}
+                                  title="Copy full review as Markdown"
+                                >
+                                  Copy Report
+                                </button>
+                              `
+                            : html``}
+                        </div>
                       </div>
 
                       ${this.reviewResult.findings.length === 0
@@ -1423,7 +1709,7 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
 
                                 ${finding.suggestedFix
                                   ? html`
-                                      <div class="finding-fix-container">
+                                      <div class="finding-fix-container ${this.copiedSnippetFindingId === finding.id ? 'copied' : ''}">
                                         <div class="finding-fix-header">
                                           <div class="finding-fix-title">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1434,7 +1720,7 @@ export class AnchorChecklistDrawer extends AnchorBaseElement {
                                           </div>
                                           <button
                                             type="button"
-                                            class="btn-copy-fix"
+                                            class="btn-copy-fix ${this.copiedSnippetFindingId === finding.id ? 'copied' : ''}"
                                             @click=${() => this.copyFixSnippet(finding.id, finding.suggestedFix!)}
                                             title="Copy fix snippet"
                                           >
